@@ -308,6 +308,12 @@ namespace parser
   template<typename TParser, typename TParserGenerator>
   PARSER_PRELUDE auto pbind (TParser && t, TParserGenerator && fu);
 
+  template<typename TParser, typename TOtherParser>
+  PARSER_PRELUDE auto pleft (TParser && t, TOtherParser && u);
+
+  template<typename TParser, typename TOtherParser>
+  PARSER_PRELUDE auto pright (TParser && t, TOtherParser && u);
+
   template<typename TValue, typename TParserFunction>
   struct parser
   {
@@ -337,10 +343,24 @@ namespace parser
     }
 
     template<typename TBindFunction>
-    PARSER_PRELUDE auto operator >> (TBindFunction && bind_function) const
+    PARSER_PRELUDE auto operator >= (TBindFunction && bind_function) const
     {
       return pbind (*this, std::forward<TBindFunction> (bind_function));
     };
+
+
+    template<typename TParser>
+    PARSER_PRELUDE auto operator > (TParser && parser) const
+    {
+      return pleft (*this, std::forward<TParser> (parser));
+    };
+
+    template<typename TParser>
+    PARSER_PRELUDE auto operator < (TParser && parser) const
+    {
+      return pright (*this, std::forward<TParser> (parser));
+    };
+
   };
 
   namespace detail
@@ -428,6 +448,57 @@ namespace parser
         }
       });
   }
+
+  template<typename TParser, typename TOtherParser>
+  PARSER_PRELUDE auto pleft (TParser && t, TOtherParser && u)
+  {
+    return detail::adapt_parser_function (
+      [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state & s)
+      {
+        using result_type = decltype (t (s));
+
+        auto tv = t (s);
+        if (tv.value)
+        {
+          auto tu = u (s);
+          if (tu.value)
+          {
+            return tv;
+          }
+          else
+          {
+            return result_type ();
+          }
+        }
+        else
+        {
+          return tv;
+        }
+      });
+  }
+
+  template<typename TParser, typename TOtherParser>
+  PARSER_PRELUDE auto pright (TParser && t, TOtherParser && u)
+  {
+    return detail::adapt_parser_function (
+      [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state & s)
+      {
+        using result_type = decltype (u (s));
+
+        auto tv = t (s);
+        if (tv.value)
+        {
+          return u (s);
+        }
+        else
+        {
+          return result_type ();
+        }
+      });
+  }
+
+  template<typename TParser, typename TOtherParser>
+  PARSER_PRELUDE auto pright (TParser && t, TOtherParser && u);
 
   template<typename TSatisfyFunction>
   PARSER_PRELUDE auto psatisfy (TSatisfyFunction && satisfy_function)
@@ -759,7 +830,7 @@ namespace parser
     {
       auto p =
             preturn (3)
-        >>  [] (int v) { return preturn (std::make_tuple (v, 4)); }
+        >=  [] (int v) { return preturn (std::make_tuple (v, 4)); }
         ;
       result<std::tuple<int,int>> r = parse (p, input);
       TEST_EQ (success (std::make_tuple (3, 4)), r);
@@ -768,7 +839,7 @@ namespace parser
     {
       auto p =
             psatisfy (satisfy_digit)
-        >>  [] (auto && v) { return preturn (v.str ()); }
+        >=  [] (auto && v) { return preturn (v.str ()); }
         ;
       result<std::string> r = parse (p, input);
       TEST_EQ (success (std::string ("1234")), r);
@@ -793,7 +864,7 @@ namespace parser
     {
       auto p =
             pskip_char ('1')
-        >>  [] (auto &&) { return pskip_char ('2'); }
+        <   pskip_char ('2')
         ;
       result<unit_type> r = parse (p, input);
       TEST_EQ (success (unit), r);
@@ -802,7 +873,7 @@ namespace parser
     {
       auto p =
             pskip_char ('1')
-        >>  [] (auto &&) { return pskip_char ('1'); }
+        <   pskip_char ('1')
         ;
       result<unit_type> r = parse (p, input);
       TEST_EQ (failure<unit_type> (), r);
@@ -827,10 +898,10 @@ namespace parser
     {
       auto p =
             pint ()
-        >>  [] (int v) { return pskip_ws () >> [v] (auto &&) { return preturn (v); }; }
-        >>  [] (int v) { return pskip_char ('+') >> [v] (auto &&) { return preturn (v); }; }
-        >>  [] (int v) { return pskip_ws () >> [v] (auto &&) { return preturn (v); }; }
-        >>  [] (int v) { return pint () >> [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
+        >   pskip_ws ()
+        >   pskip_char ('+')
+        >   pskip_ws ()
+        >=  [] (int v) { return pint () >= [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
         ;
       result<std::tuple<int,int>> r = parse (p, input);
       TEST_EQ (success (std::make_tuple (1234, 5678)), r);
@@ -839,10 +910,10 @@ namespace parser
     {
       auto p =
             pint ()
-        >>  [] (int v) { return pskip_ws () >> [v] (auto &&) { return preturn (v); }; }
-        >>  [] (int v) { return pskip_char ('-') >> [v] (auto &&) { return preturn (v); }; }
-        >>  [] (int v) { return pskip_ws () >> [v] (auto &&) { return preturn (v); }; }
-        >>  [] (int v) { return pint () >> [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
+        >   pskip_ws ()
+        >   pskip_char ('-')
+        >   pskip_ws ()
+        >=  [] (int v) { return pint () >= [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
         ;
       result<std::tuple<int,int>> r = parse (p, input);
       auto e = failure<std::tuple<int,int>> ();
