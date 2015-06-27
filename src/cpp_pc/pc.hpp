@@ -52,13 +52,13 @@ namespace cpp_pc
     state (char const * begin, char const * end) noexcept
       : begin   (begin)
       , end     (end)
-      , current (begin)
     {
       CPP_PC__ASSERT(begin <= end);
     }
 
-    CPP_PC__INLINE int peek () noexcept
+    CPP_PC__INLINE int peek (std::size_t position) const noexcept
     {
+      auto current = begin + position;
       CPP_PC__ASSERT(current <= end);
       return
           current < end
@@ -67,27 +67,25 @@ namespace cpp_pc
         ;
     }
 
-    CPP_PC__INLINE std::size_t remaining () const noexcept
+    CPP_PC__INLINE std::size_t remaining (std::size_t position) const noexcept
     {
+      auto current = begin + position;
       CPP_PC__ASSERT(current <= end);
       return end - current;
     }
 
-    CPP_PC__INLINE void advance () noexcept
-    {
-      CPP_PC__ASSERT(current <= end);
-      if (current < end)
-      {
-        ++current;
-      }
-    }
-
     template<typename TSatisfyFunction>
-    CPP_PC__INLINE sub_string satisfy (std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function) noexcept
+    CPP_PC__INLINE sub_string satisfy (
+        std::size_t position
+      , std::size_t at_least
+      , std::size_t at_most
+      , TSatisfyFunction && satisfy_function
+      ) const noexcept
     {
+      auto current = begin + position;
       CPP_PC__ASSERT(current <= end);
 
-      auto rem = remaining ();
+      auto rem = remaining (position);
 
       if (rem < at_least)
       {
@@ -109,47 +107,47 @@ namespace cpp_pc
   private:
     char const * const  begin   ;
     char const * const  end     ;
-    char const *        current ;
   };
-
-  struct empty_result_type
-  {
-  };
-
-  empty_result_type empty_result;
 
   template<typename T>
   struct result
   {
     using value_type = T;
 
-    result ()                             = default;
+    result ()                             = delete ;
     result (result const &)               = default;
     result (result &&)                    = default;
     result & operator = (result const &)  = default;
     result & operator = (result &&)       = default;
     ~result ()                            = default;
 
-    CPP_PC__PRELUDE result (empty_result_type)
+    CPP_PC__PRELUDE explicit result (std::size_t position)
+      : position (position)
     {
     }
 
-    CPP_PC__PRELUDE explicit result (T const & o)
-      : value (o)
+    CPP_PC__PRELUDE explicit result (std::size_t position, T const & o)
+      : position (position)
+      , value (o)
     {
     }
 
-    CPP_PC__PRELUDE explicit result (T && o) noexcept
-      : value (std::move (o))
+    CPP_PC__PRELUDE explicit result (std::size_t position, T && o) noexcept
+      : position (position)
+      , value (std::move (o))
     {
     }
 
     bool operator == (result const & o) const
     {
-      return value == o.value;
+      return 
+            position  == o.position
+        &&  value     == o.value
+        ;
     }
 
-    opt<T>  value;
+    std::size_t position  ;
+    opt<T>      value     ;
   };
 
   template<typename TParser, typename TParserGenerator>
@@ -170,7 +168,7 @@ namespace cpp_pc
     parser_function_type parser_function;
 /*
     static_assert (
-        std::is_same<result<value_type>, std::result_of_t<parser_function_type (state &)>::value
+        std::is_same<result<value_type>, std::result_of_t<parser_function_type (state const &, size_t)>::value
       , "Must return result<_>"
       );
 */
@@ -184,9 +182,9 @@ namespace cpp_pc
     {
     }
 
-    CPP_PC__PRELUDE result<value_type> operator () (state & s) const
+    CPP_PC__PRELUDE result<value_type> operator () (state const & s, std::size_t position) const
     {
-      return parser_function (s);
+      return parser_function (s, position);
     }
 
     template<typename TBindFunction>
@@ -215,24 +213,24 @@ namespace cpp_pc
     template<typename TParserFunction>
     CPP_PC__PRELUDE auto adapt_parser_function (TParserFunction && parser_function)
     {
-      using parser_function_type  = strip_type_t<TParserFunction>                     ;
-      using parser_result_type    = std::result_of_t<parser_function_type (state &)>  ;
-      using value_type            = typename parser_result_type::value_type           ;
+      using parser_function_type  = strip_type_t<TParserFunction>                                       ;
+      using parser_result_type    = std::result_of_t<parser_function_type (state const &, std::size_t)> ;
+      using value_type            = typename parser_result_type::value_type                             ;
 
       return parser<value_type, parser_function_type> (std::forward<TParserFunction> (parser_function));
     }
   }
 
   template<typename T>
-  CPP_PC__PRELUDE auto success (T && v)
+  CPP_PC__PRELUDE auto success (std::size_t position, T && v)
   {
-    return result<detail::strip_type_t<T>> (std::forward<T> (v));
+    return result<detail::strip_type_t<T>> (position, std::forward<T> (v));
   }
 
   template<typename T>
-  CPP_PC__PRELUDE auto failure ()
+  CPP_PC__PRELUDE auto failure (std::size_t position)
   {
-    return result<T> ();
+    return result<T> (position);
   }
 
   template<typename TValueType, typename TParserFunction>
@@ -242,7 +240,7 @@ namespace cpp_pc
     auto end    = begin + i.size ();
     state s (begin, end);
 
-    return p (s);
+    return p (s, 0);
   }
 
   auto satisfy_digit = [] (std::size_t, char ch)
@@ -271,9 +269,9 @@ namespace cpp_pc
   CPP_PC__PRELUDE auto preturn (TValue && v)
   {
     return detail::adapt_parser_function (
-      [v = std::forward<TValue> (v)] (state & s)
+      [v = std::forward<TValue> (v)] (state const & s, std::size_t position)
       {
-        return success (v);
+        return success (position, v);
       });
   }
 
@@ -281,17 +279,17 @@ namespace cpp_pc
   CPP_PC__PRELUDE auto pbind (TParser && t, TParserGenerator && fu)
   {
     return detail::adapt_parser_function (
-      [t = std::forward<TParser> (t), fu = std::forward<TParserGenerator> (fu)] (state & s)
+      [t = std::forward<TParser> (t), fu = std::forward<TParserGenerator> (fu)] (state const & s, std::size_t position)
       {
-        auto tv = t (s);
-        using result_type = decltype (fu (std::move (tv.value.get ())) (s));
+        auto tv = t (s, position);
+        using result_type = decltype (fu (std::move (tv.value.get ())) (s, tv.position));
         if (tv.value)
         {
-          return fu (std::move (tv.value.get ())) (s);
+          return fu (std::move (tv.value.get ())) (s, 0);
         }
         else
         {
-          return result_type ();
+          return result_type (position);  // TODO: tv.position?
         }
       });
   }
@@ -300,21 +298,21 @@ namespace cpp_pc
   CPP_PC__PRELUDE auto pleft (TParser && t, TOtherParser && u)
   {
     return detail::adapt_parser_function (
-      [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state & s)
+      [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state const & s, std::size_t position)
       {
-        using result_type = decltype (t (s));
+        using result_type = decltype (t (s, 0));
 
-        auto tv = t (s);
+        auto tv = t (s, position);
         if (tv.value)
         {
-          auto tu = u (s);
+          auto tu = u (s, tv.position);
           if (tu.value)
           {
             return tv;
           }
           else
           {
-            return result_type ();
+            return result_type (position);  // TODO: tv.position?
           }
         }
         else
@@ -328,18 +326,18 @@ namespace cpp_pc
   CPP_PC__PRELUDE auto pright (TParser && t, TOtherParser && u)
   {
     return detail::adapt_parser_function (
-      [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state & s)
+      [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state const & s, std::size_t position)
       {
-        using result_type = decltype (u (s));
+        using result_type = decltype (u (s, 0));
 
-        auto tv = t (s);
+        auto tv = t (s, position);
         if (tv.value)
         {
-          return u (s);
+          return u (s, tv.position);
         }
         else
         {
-          return result_type ();
+          return result_type (position);  // TODO: tv.position
         }
       });
   }
@@ -351,16 +349,17 @@ namespace cpp_pc
   CPP_PC__PRELUDE auto psatisfy (std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
   {
     return detail::adapt_parser_function (
-      [at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state & s)
+      [at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
       {
-        auto result = s.satisfy (at_least, at_most, satisfy_function);
+        auto result = s.satisfy (position, at_least, at_most, satisfy_function);
 
-        if (result.size () < at_least)
+        auto consumed = result.size ();
+        if (consumed < at_least)
         {
-          return failure<sub_string> ();
+          return failure<sub_string> (position);
         }
 
-        return success (std::move (result));
+        return success (position + consumed, std::move (result));
       });
   }
 
@@ -368,28 +367,26 @@ namespace cpp_pc
   CPP_PC__PRELUDE auto pskip_satisfy (std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
   {
     return detail::adapt_parser_function (
-      [at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state & s)
+      [at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
       {
-        s.satisfy (at_least, at_most, satisfy_function);
-        return success (unit);
+        auto ss = s.satisfy (position, at_least, at_most, satisfy_function);
+        return success (position + ss.size (), unit);
       });
   }
 
   CPP_PC__INLINE auto pskip_char (char ch)
   {
     return detail::adapt_parser_function (
-      [ch] (state & s)
+      [ch] (state const & s, std::size_t position)
       {
-        auto peek = s.peek ();
+        auto peek = s.peek (position);
         if (peek == ch)
         {
-          s.advance ();
-
-          return success (unit);
+          return success (position + 1, unit);
         }
         else
         {
-          return failure<unit_type> ();
+          return failure<unit_type> (position);
         }
       });
   }
@@ -402,21 +399,22 @@ namespace cpp_pc
   CPP_PC__INLINE auto pint ()
   {
     return detail::adapt_parser_function (
-      [] (state & s)
+      [] (state const & s, std::size_t position)
       {
-        auto ss = s.satisfy (1U, 10U, satisfy_digit);
-        if (ss.size () > 0)
+        auto ss = s.satisfy (position, 1U, 10U, satisfy_digit);
+        auto consumed = ss.size ();
+        if (consumed > 0)
         {
           auto i = 0;
           for (auto iter = ss.begin; iter != ss.end; ++iter)
           {
             i = 10*i + (*iter - '0');
           }
-          return success (i);
+          return success (position + consumed, i);
         }
         else
         {
-          return failure<int> ();
+          return failure<int> (position);
         }
       });
   }

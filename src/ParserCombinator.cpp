@@ -16,7 +16,7 @@ namespace test_parser
   bool test_eq (
       char const *      file
     , int               line_no
-    , char const *      func
+    , char const *      // func
     , char const *      expected_name
     , TExpected const & expected
     , char const *      actual_name
@@ -69,13 +69,13 @@ namespace test_parser
     struct print_tuple<sz, sz>
     {
       template<typename... TArgs>
-      static void print (std::ostream & o, std::tuple<TArgs...> const & v)
+      static void print (std::ostream &, std::tuple<TArgs...> const &)
       {
       }
     };
   }
 
-  std::ostream & operator << (std::ostream & o, std::tuple<> const & v)
+  std::ostream & operator << (std::ostream & o, std::tuple<> const &)
   {
     o
       << "()"
@@ -122,8 +122,11 @@ namespace test_parser
   std::ostream & operator << (std::ostream & o, result<TValue> const & v)
   {
     o
-      << "result:"
+      << "{result: "
+      << v.position
+      << ", "
       << v.value
+      << "}"
       ;
     return o;
   }
@@ -253,8 +256,9 @@ namespace test_parser
       auto p =
             preturn (3)
         ;
-      result<int> r = parse (p, input);
-      TEST_EQ (success (3), r);
+      result<int> expected  = success (0, 3);
+      result<int> actual    = parse (p, input);
+      TEST_EQ (expected, actual);
     }
 
     {
@@ -262,8 +266,9 @@ namespace test_parser
             preturn (3)
         >=  [] (int v) { return preturn (std::make_tuple (v, 4)); }
         ;
-      result<std::tuple<int,int>> r = parse (p, input);
-      TEST_EQ (success (std::make_tuple (3, 4)), r);
+      result<std::tuple<int,int>> expected  = success (0, std::make_tuple (3, 4));
+      result<std::tuple<int,int>> actual    = parse (p, input);
+      TEST_EQ (expected, actual);
     }
 
     {
@@ -271,24 +276,27 @@ namespace test_parser
             psatisfy (1U, 10U, satisfy_digit)
         >=  [] (auto && v) { return preturn (v.str ()); }
         ;
-      result<std::string> r = parse (p, input);
-      TEST_EQ (success (std::string ("1234")), r);
+      result<std::string> expected  = success (0, std::string ("1234"));
+      result<std::string> actual    = parse (p, input);
+      TEST_EQ (expected, actual);
     }
 
     {
       auto p =
             pskip_char ('1')
         ;
-      result<unit_type> r = parse (p, input);
-      TEST_EQ (success (unit), r);
+      result<unit_type> expected  = success (1, unit);
+      result<unit_type> actual    = parse (p, input);
+      TEST_EQ (expected, actual);
     }
 
     {
       auto p =
             pskip_char ('2')
         ;
-      result<unit_type> r = parse (p, input);
-      TEST_EQ (failure<unit_type> (), r);
+      result<unit_type> expected  = failure<unit_type> (0);
+      result<unit_type> actual    = parse (p, input);
+      TEST_EQ (expected, actual);
     }
 
     {
@@ -296,8 +304,9 @@ namespace test_parser
             pskip_char ('1')
         <   pskip_char ('2')
         ;
-      result<unit_type> r = parse (p, input);
-      TEST_EQ (success (unit), r);
+      result<unit_type> expected  = success (2, unit);
+      result<unit_type> actual    = parse (p, input);
+      TEST_EQ (expected, actual);
     }
 
     {
@@ -305,24 +314,27 @@ namespace test_parser
             pskip_char ('1')
         <   pskip_char ('1')
         ;
-      result<unit_type> r = parse (p, input);
-      TEST_EQ (failure<unit_type> (), r);
+      result<unit_type> expected  = failure<unit_type> (0);
+      result<unit_type> actual    = parse (p, input);
+      TEST_EQ (expected, actual);
     }
 
     {
       auto p =
             pint ()
         ;
-      result<int> r = parse (p, input);
-      TEST_EQ (success (1234), r);
+      result<int> expected  = success (4, 1234);
+      result<int> actual    = parse (p, input);
+      TEST_EQ (expected, actual);
     }
 
     {
       auto p =
             pskip_ws ()
         ;
-      result<unit_type> r = parse (p, input);
-      TEST_EQ (success (unit), r);
+      result<unit_type> expected  = success (0, unit);
+      result<unit_type> actual    = parse (p, input);
+      TEST_EQ (expected, actual);
     }
 
     {
@@ -333,8 +345,9 @@ namespace test_parser
         >   pskip_ws ()
         >=  [] (int v) { return pint () >= [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
         ;
-      result<std::tuple<int,int>> r = parse (p, input);
-      TEST_EQ (success (std::make_tuple (1234, 5678)), r);
+      result<std::tuple<int,int>> expected  = success (11, std::make_tuple (1234, 5678));
+      result<std::tuple<int,int>> actual    = parse (p, input);
+      TEST_EQ (expected, actual);
     }
 
     {
@@ -345,9 +358,9 @@ namespace test_parser
         >   pskip_ws ()
         >=  [] (int v) { return pint () >= [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
         ;
-      result<std::tuple<int,int>> r = parse (p, input);
-      auto e = failure<std::tuple<int,int>> ();
-      TEST_EQ (e, r);
+      result<std::tuple<int,int>> expected  = failure<std::tuple<int,int>> (0);
+      result<std::tuple<int,int>> actual    = parse (p, input);
+      TEST_EQ (expected, actual);
     }
   }
 }
