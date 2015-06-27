@@ -5,9 +5,21 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="cpp_pc">
+      <UniqueIdentifier>{beafa289-dad3-4fe8-bf9b-aea24858a798}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="cpp_pc\opt.hpp">
+      <Filter>cpp_pc</Filter>
+    </ClInclude>
+    <ClInclude Include="cpp_pc\pc.hpp">
+      <Filter>cpp_pc</Filter>
+    </ClInclude>
+    <ClInclude Include="cpp_pc\common.hpp">
+      <Filter>cpp_pc</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp" />

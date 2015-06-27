@@ -78,6 +78,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="cpp_pc\common.hpp" />
+    <ClInclude Include="cpp_pc\opt.hpp" />
+    <ClInclude Include="cpp_pc\pc.hpp" />
     <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <ItemGroup>
