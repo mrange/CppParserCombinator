@@ -140,7 +140,7 @@ namespace cpp_pc
 
     CPP_PC__PRELUDE bool operator == (result const & o) const
     {
-      return 
+      return
             position  == o.position
         &&  value     == o.value
         ;
@@ -324,7 +324,7 @@ namespace cpp_pc
         {
           CPP_PC__ASSERT (tv.position == position);
           return tv
-            .fail_as<value_type> ()
+            .template fail_as<value_type> ()
             ;
         }
       });
@@ -353,7 +353,7 @@ namespace cpp_pc
           else
           {
             return tu
-              .fail_as<value_type> ()
+              .template fail_as<value_type> ()
               .merge_with (tv)
               .rollback_to (position)
               ;

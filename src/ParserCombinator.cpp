@@ -8,37 +8,11 @@
 
 #include "cpp_pc/pc.hpp"
 
+#define TEST_EQ(expected, actual) test_eq (__FILE__, __LINE__, __FUNCTION__, #expected, expected, #actual, actual)
+
 namespace test_parser
 {
   using namespace cpp_pc;
-
-  template<typename TExpected, typename TActual>
-  bool test_eq (
-      char const *      file
-    , int               line_no
-    , char const *      // func
-    , char const *      expected_name
-    , TExpected const & expected
-    , char const *      actual_name
-    , TActual const &   actual
-    )
-  {
-    if (!(expected == actual))
-    {
-      std::cout
-        << file << "(" << line_no << "): EQ - "
-        << expected_name << "(" << expected << ")"
-        << " == "
-        << actual_name << "(" << actual << ")"
-        << std::endl
-        ;
-      return false;
-    }
-
-    return true;
-  }
-
-#define TEST_EQ(expected, actual) test_eq (__FILE__, __LINE__, __FUNCTION__, #expected, expected, #actual, actual)
 
   std::ostream & operator << (std::ostream & o, unit_type const &)
   {
@@ -129,6 +103,32 @@ namespace test_parser
       << "}"
       ;
     return o;
+  }
+
+  template<typename TExpected, typename TActual>
+  bool test_eq (
+      char const *      file
+    , int               line_no
+    , char const *      // func
+    , char const *      expected_name
+    , TExpected const & expected
+    , char const *      actual_name
+    , TActual const &   actual
+    )
+  {
+    if (!(expected == actual))
+    {
+      std::cout
+        << file << "(" << line_no << "): EQ - "
+        << expected_name << "(" << expected << ")"
+        << " == "
+        << actual_name << "(" << actual << ")"
+        << std::endl
+        ;
+      return false;
+    }
+
+    return true;
   }
 
   template<typename T>
@@ -392,6 +392,7 @@ int main()
   test_parser::test_opt<std::string> ("1234", "5678");
   test_parser::test_opt<int> (1,3);
   test_parser::test_parser ();
-	return 0;
+  std::cout << "Done!" << std::endl;
+  return 0;
 }
 
