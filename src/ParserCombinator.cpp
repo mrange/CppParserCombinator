@@ -251,6 +251,7 @@ namespace test_parser
   void test_parser ()
   {
     std::string input = "1234 + 5678";
+    auto error = std::make_shared<expected_error> ("expected");
 
     {
       auto p =
@@ -273,7 +274,7 @@ namespace test_parser
 
     {
       auto p =
-            psatisfy (1U, 10U, satisfy_digit)
+            psatisfy ("digits", 1U, 10U, satisfy_digit)
         >=  [] (auto && v) { return preturn (v.str ()); }
         ;
       result<std::string> expected  = success (4, std::string ("1234"));
@@ -294,7 +295,7 @@ namespace test_parser
       auto p =
             pskip_char ('2')
         ;
-      result<unit_type> expected  = failure<unit_type> (0);
+      result<unit_type> expected  = failure<unit_type> (0, error);
       result<unit_type> actual    = parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -314,7 +315,7 @@ namespace test_parser
             pskip_char ('1')
         >   pskip_char ('1')
         ;
-      result<unit_type> expected  = failure<unit_type> (0);
+      result<unit_type> expected  = failure<unit_type> (0, error);
       result<unit_type> actual    = parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -334,7 +335,7 @@ namespace test_parser
             pskip_char ('1')
         <   pskip_char ('1')
         ;
-      result<unit_type> expected  = failure<unit_type> (0);
+      result<unit_type> expected  = failure<unit_type> (0, error);
       result<unit_type> actual    = parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -378,7 +379,7 @@ namespace test_parser
         >   pskip_ws ()
         >=  [] (int v) { return pint () >= [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
         ;
-      result<std::tuple<int,int>> expected  = failure<std::tuple<int,int>> (0);
+      result<std::tuple<int,int>> expected  = failure<std::tuple<int,int>> (0, error);
       result<std::tuple<int,int>> actual    = parse (p, input);
       TEST_EQ (expected, actual);
     }

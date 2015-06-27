@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <memory>
 #include <string>
 #include <type_traits>
 
@@ -109,6 +110,40 @@ namespace cpp_pc
     char const * const  end     ;
   };
 
+  struct error
+  {
+    using ptr = std::shared_ptr<error>;
+
+    error ()                              = default;
+    error (error const &)                 = delete ;
+    error (error &&)                      = delete ;
+    error & operator = (error const &)    = delete ;
+    error & operator = (error &&)         = delete ;
+    virtual ~error ()                     = default;
+  };
+
+  struct expected_error : error
+  {
+    expected_error (std::string const & expected)
+      : expected (std::move (expected))
+    {
+    }
+
+    std::string expected ;
+  };
+
+  struct fork_error : error
+  {
+    fork_error (error::ptr left, error::ptr right)
+      : left  (std::move (left))
+      , right (std::move (right))
+    {
+    }
+
+    error::ptr left ;
+    error::ptr right;
+  };
+
   template<typename T>
   struct result
   {
@@ -121,20 +156,15 @@ namespace cpp_pc
     result & operator = (result &&)       = default;
     ~result ()                            = default;
 
-    CPP_PC__PRELUDE explicit result (std::size_t position)
-      : position (position)
+    CPP_PC__PRELUDE explicit result (std::size_t position, error::ptr error)
+      : position  (std::move (position))
+      , error     (std::move (error))
     {
     }
 
-    CPP_PC__PRELUDE explicit result (std::size_t position, T const & o)
-      : position (position)
-      , value (o)
-    {
-    }
-
-    CPP_PC__PRELUDE explicit result (std::size_t position, T && o) noexcept
-      : position (position)
-      , value (std::move (o))
+    CPP_PC__PRELUDE explicit result (std::size_t position, T o)
+      : position  (std::move (position))
+      , value     (std::move (o))
     {
     }
 
@@ -164,17 +194,26 @@ namespace cpp_pc
     template<typename TOther>
     CPP_PC__PRELUDE result<TOther> fail_as () const
     {
-      return result<TOther> (position);
+      return result<TOther> (position, error);
     }
 
     template<typename TOther>
     CPP_PC__INLINE result<value_type> & merge_with (result<TOther> const & o)
     {
+      if (error && o.error)
+      {
+        error = std::make_shared<fork_error> (std::move (error), o.error);
+      }
+      else if (o.error)
+      {
+        error = o.error;
+      }
       return *this;
     }
 
     std::size_t position  ;
     opt<T>      value     ;
+    error::ptr  error     ;
   };
 
   template<typename TParser, typename TParserGenerator>
@@ -255,9 +294,9 @@ namespace cpp_pc
   }
 
   template<typename T>
-  CPP_PC__PRELUDE auto failure (std::size_t position)
+  CPP_PC__PRELUDE auto failure (std::size_t position, error::ptr error)
   {
-    return result<T> (position);
+    return result<T> (std::move (position), std::move (error));
   }
 
   template<typename TValueType, typename TParserFunction>
@@ -400,17 +439,19 @@ namespace cpp_pc
   CPP_PC__PRELUDE auto pright (TParser && t, TOtherParser && u);
 
   template<typename TSatisfyFunction>
-  CPP_PC__PRELUDE auto psatisfy (std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
+  CPP_PC__INLINE auto psatisfy (std::string expected, std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
   {
+    auto error = std::make_shared<expected_error> (std::move (expected));
+
     return detail::adapt_parser_function (
-      [at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
+      [error = std::move (error), at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
       {
         auto result = s.satisfy (position, at_least, at_most, satisfy_function);
 
         auto consumed = result.size ();
         if (consumed < at_least)
         {
-          return failure<sub_string> (position);
+          return failure<sub_string> (position, error);
         }
 
         return success (position + consumed, std::move (result));
@@ -430,8 +471,10 @@ namespace cpp_pc
 
   CPP_PC__INLINE auto pskip_char (char ch)
   {
+    char expected[] = {'\'', ch, '\'', 0};
+    auto error = std::make_shared<expected_error> (expected);
     return detail::adapt_parser_function (
-      [ch] (state const & s, std::size_t position)
+      [ch, error = std::move (error)] (state const & s, std::size_t position)
       {
         auto peek = s.peek (position);
         if (peek == ch)
@@ -440,7 +483,7 @@ namespace cpp_pc
         }
         else
         {
-          return failure<unit_type> (position);
+          return failure<unit_type> (position, error);
         }
       });
   }
@@ -448,6 +491,11 @@ namespace cpp_pc
   CPP_PC__INLINE auto pskip_ws ()
   {
     return pskip_satisfy (0U, SIZE_MAX, satisfy_whitespace);
+  }
+
+  namespace detail
+  {
+    auto const pint_error = std::make_shared<expected_error> ("integer");
   }
 
   CPP_PC__INLINE auto pint ()
@@ -468,7 +516,7 @@ namespace cpp_pc
         }
         else
         {
-          return failure<int> (position);
+          return failure<int> (position, detail::pint_error);
         }
       });
   }
