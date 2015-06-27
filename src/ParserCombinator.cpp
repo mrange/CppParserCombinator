@@ -276,7 +276,7 @@ namespace test_parser
             psatisfy (1U, 10U, satisfy_digit)
         >=  [] (auto && v) { return preturn (v.str ()); }
         ;
-      result<std::string> expected  = success (0, std::string ("1234"));
+      result<std::string> expected  = success (4, std::string ("1234"));
       result<std::string> actual    = parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -293,6 +293,26 @@ namespace test_parser
     {
       auto p =
             pskip_char ('2')
+        ;
+      result<unit_type> expected  = failure<unit_type> (0);
+      result<unit_type> actual    = parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            pskip_char ('1')
+        >   pskip_char ('2')
+        ;
+      result<unit_type> expected  = success (2, unit);
+      result<unit_type> actual    = parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            pskip_char ('1')
+        >   pskip_char ('1')
         ;
       result<unit_type> expected  = failure<unit_type> (0);
       result<unit_type> actual    = parse (p, input);

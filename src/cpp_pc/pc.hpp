@@ -138,12 +138,39 @@ namespace cpp_pc
     {
     }
 
-    bool operator == (result const & o) const
+    CPP_PC__PRELUDE bool operator == (result const & o) const
     {
       return 
             position  == o.position
         &&  value     == o.value
         ;
+    }
+
+    CPP_PC__INLINE result<value_type> & reposition (std::size_t p)
+    {
+      position = p;
+      return *this;
+    }
+
+    CPP_PC__INLINE result<value_type> & rollback_to (std::size_t p)
+    {
+      if (!value)
+      {
+        position = p;
+      }
+      return *this;
+    }
+
+    template<typename TOther>
+    CPP_PC__PRELUDE result<TOther> fail_as () const
+    {
+      return result<TOther> (position);
+    }
+
+    template<typename TOther>
+    CPP_PC__INLINE result<value_type> & merge_with (result<TOther> const & o)
+    {
+      return *this;
     }
 
     std::size_t position  ;
@@ -282,14 +309,23 @@ namespace cpp_pc
       [t = std::forward<TParser> (t), fu = std::forward<TParserGenerator> (fu)] (state const & s, std::size_t position)
       {
         auto tv = t (s, position);
-        using result_type = decltype (fu (std::move (tv.value.get ())) (s, tv.position));
+
+        using result_type = decltype (fu (std::move (tv.value.get ())) (s, 0));
+        using value_type  = typename result_type::value_type                  ;
+
         if (tv.value)
         {
-          return fu (std::move (tv.value.get ())) (s, 0);
+          return fu (std::move (tv.value.get ())) (s, tv.position)
+            .merge_with (tv)
+            .rollback_to (position)
+            ;
         }
         else
         {
-          return result_type (position);  // TODO: tv.position?
+          CPP_PC__ASSERT (tv.position == position);
+          return tv
+            .fail_as<value_type> ()
+            ;
         }
       });
   }
@@ -300,7 +336,8 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state const & s, std::size_t position)
       {
-        using result_type = decltype (t (s, 0));
+        using result_type = decltype (t (s, 0))               ;
+        using value_type  = typename result_type::value_type  ;
 
         auto tv = t (s, position);
         if (tv.value)
@@ -308,15 +345,23 @@ namespace cpp_pc
           auto tu = u (s, tv.position);
           if (tu.value)
           {
-            return tv;
+            return tv
+              .merge_with (tu)
+              .reposition (tu.position)
+              ;
           }
           else
           {
-            return result_type (position);  // TODO: tv.position?
+            return tu
+              .fail_as<value_type> ()
+              .merge_with (tv)
+              .rollback_to (position)
+              ;
           }
         }
         else
         {
+          CPP_PC__ASSERT (tv.position == position);
           return tv;
         }
       });
@@ -328,16 +373,21 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state const & s, std::size_t position)
       {
-        using result_type = decltype (u (s, 0));
+        using result_type = decltype (u (s, 0))               ;
+        using value_type  = typename result_type::value_type  ;
 
         auto tv = t (s, position);
         if (tv.value)
         {
-          return u (s, tv.position);
+          return u (s, tv.position)
+            .merge_with (tv)
+            .rollback_to (position)
+            ;
         }
         else
         {
-          return result_type (position);  // TODO: tv.position
+          CPP_PC__ASSERT (tv.position == position);
+          return tv;
         }
       });
   }

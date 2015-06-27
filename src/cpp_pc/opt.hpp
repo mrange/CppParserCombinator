@@ -29,7 +29,7 @@ namespace cpp_pc
 
     CPP_PC__INLINE ~opt () noexcept
     {
-      free_opt ();
+      clear ();
     }
 
     CPP_PC__INLINE explicit opt (value_type const & v)
@@ -84,7 +84,7 @@ namespace cpp_pc
         return *this;
       }
 
-      free_opt ();
+      clear ();
 
       has_value = std::move (o.has_value);
       o.has_value = false;
@@ -131,6 +131,15 @@ namespace cpp_pc
       return *get_ptr ();
     }
 
+    void clear () noexcept
+    {
+      if (has_value)
+      {
+        has_value = false;
+        get ().~value_type ();
+      }
+    }
+
   private:
 
     CPP_PC__PRELUDE value_type const * get_ptr () const noexcept
@@ -141,15 +150,6 @@ namespace cpp_pc
     CPP_PC__INLINE value_type * get_ptr () noexcept
     {
       return reinterpret_cast<value_type *> (&storage);
-    }
-
-    void free_opt () noexcept
-    {
-      if (has_value)
-      {
-        has_value = false;
-        get ().~value_type ();
-      }
     }
 
     alignas(value_type) unsigned char storage[sizeof (value_type)];
