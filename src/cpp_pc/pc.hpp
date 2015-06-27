@@ -110,19 +110,19 @@ namespace cpp_pc
     char const * const  end     ;
   };
 
-  struct error
+  struct base_error
   {
-    using ptr = std::shared_ptr<error>;
+    using ptr = std::shared_ptr<base_error>;
 
-    error ()                              = default;
-    error (error const &)                 = delete ;
-    error (error &&)                      = delete ;
-    error & operator = (error const &)    = delete ;
-    error & operator = (error &&)         = delete ;
-    virtual ~error ()                     = default;
+    base_error ()                               = default;
+    base_error (base_error const &)             = delete ;
+    base_error (base_error &&)                  = delete ;
+    base_error & operator = (base_error const &)= delete ;
+    base_error & operator = (base_error &&)     = delete ;
+    virtual ~base_error ()                      = default;
   };
 
-  struct expected_error : error
+  struct expected_error : base_error
   {
     expected_error (std::string const & expected)
       : expected (std::move (expected))
@@ -132,16 +132,16 @@ namespace cpp_pc
     std::string expected ;
   };
 
-  struct fork_error : error
+  struct fork_error : base_error
   {
-    fork_error (error::ptr left, error::ptr right)
+    fork_error (base_error::ptr left, base_error::ptr right)
       : left  (std::move (left))
       , right (std::move (right))
     {
     }
 
-    error::ptr left ;
-    error::ptr right;
+    base_error::ptr left ;
+    base_error::ptr right;
   };
 
   template<typename T>
@@ -156,7 +156,7 @@ namespace cpp_pc
     result & operator = (result &&)       = default;
     ~result ()                            = default;
 
-    CPP_PC__PRELUDE explicit result (std::size_t position, error::ptr error)
+    CPP_PC__INLINE explicit result (std::size_t position, base_error::ptr error)
       : position  (std::move (position))
       , error     (std::move (error))
     {
@@ -202,9 +202,9 @@ namespace cpp_pc
       return *this;
     }
 
-    std::size_t position  ;
-    opt<T>      value     ;
-    error::ptr  error     ;
+    std::size_t     position  ;
+    opt<T>          value     ;
+    base_error::ptr error     ;
   };
 
   template<typename TParser, typename TParserGenerator>
@@ -285,7 +285,7 @@ namespace cpp_pc
   }
 
   template<typename T>
-  CPP_PC__PRELUDE auto failure (std::size_t position, error::ptr error)
+  CPP_PC__INLINE auto failure (std::size_t position, base_error::ptr error)
   {
     return result<T> (std::move (position), std::move (error));
   }
