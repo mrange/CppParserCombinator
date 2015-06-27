@@ -182,15 +182,6 @@ namespace cpp_pc
       return *this;
     }
 
-    CPP_PC__INLINE result<value_type> & rollback_to (std::size_t p)
-    {
-      if (!value)
-      {
-        position = p;
-      }
-      return *this;
-    }
-
     template<typename TOther>
     CPP_PC__PRELUDE result<TOther> fail_as () const
     {
@@ -356,12 +347,10 @@ namespace cpp_pc
         {
           return fu (std::move (tv.value.get ())) (s, tv.position)
             .merge_with (tv)
-            .rollback_to (position)
             ;
         }
         else
         {
-          CPP_PC__ASSERT (tv.position == position);
           return tv
 #ifdef _MSC_VER
             .fail_as<value_type> ()
@@ -396,15 +385,17 @@ namespace cpp_pc
           else
           {
             return tu
+#ifdef _MSC_VER
+              .fail_as<value_type> ()
+#else
               .template fail_as<value_type> ()
+#endif
               .merge_with (tv)
-              .rollback_to (position)
               ;
           }
         }
         else
         {
-          CPP_PC__ASSERT (tv.position == position);
           return tv;
         }
       });
@@ -424,12 +415,10 @@ namespace cpp_pc
         {
           return u (s, tv.position)
             .merge_with (tv)
-            .rollback_to (position)
             ;
         }
         else
         {
-          CPP_PC__ASSERT (tv.position == position);
           return tv;
         }
       });
