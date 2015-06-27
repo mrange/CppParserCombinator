@@ -324,7 +324,11 @@ namespace cpp_pc
         {
           CPP_PC__ASSERT (tv.position == position);
           return tv
+#ifdef _MSC_VER
+            .fail_as<value_type> ()
+#else
             .template fail_as<value_type> ()
+#endif
             ;
         }
       });
