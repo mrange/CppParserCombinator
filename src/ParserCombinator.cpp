@@ -8,7 +8,7 @@
 
 #include "cpp_pc/pc.hpp"
 
-namespace
+namespace test_parser
 {
   using namespace cpp_pc;
 
@@ -268,7 +268,7 @@ namespace
 
     {
       auto p =
-            psatisfy (satisfy_digit)
+            psatisfy (1U, 10U, satisfy_digit)
         >=  [] (auto && v) { return preturn (v.str ()); }
         ;
       result<std::string> r = parse (p, input);
@@ -356,9 +356,9 @@ namespace
 int main()
 {
   std::cout << "Running tests..." << std::endl;
-  test_opt<std::string> ("1234", "5678");
-  test_opt<int> (1,3);
-  test_parser ();
+  test_parser::test_opt<std::string> ("1234", "5678");
+  test_parser::test_opt<int> (1,3);
+  test_parser::test_parser ();
 	return 0;
 }
 

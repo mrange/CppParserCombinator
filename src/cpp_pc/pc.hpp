@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <string>
 #include <type_traits>
 
@@ -21,8 +22,8 @@ namespace cpp_pc
     sub_string ()                                 = delete ;
     sub_string (sub_string const &)               = default;
     sub_string (sub_string &&)                    = default;
-    sub_string & operator = (sub_string const &)  = default;
-    sub_string & operator = (sub_string &&)       = default;
+    sub_string & operator = (sub_string const &)  = delete ;
+    sub_string & operator = (sub_string &&)       = delete ;
     ~sub_string ()                                = default;
 
     CPP_PC__INLINE std::string str () const
@@ -48,15 +49,17 @@ namespace cpp_pc
     state & operator = (state &&)         = delete ;
     ~state ()                             = default;
 
-    state (char const * begin, char const * end)
+    state (char const * begin, char const * end) noexcept
       : begin   (begin)
       , end     (end)
       , current (begin)
     {
+      CPP_PC__ASSERT(begin <= end);
     }
 
-    CPP_PC__INLINE int peek ()
+    CPP_PC__INLINE int peek () noexcept
     {
+      CPP_PC__ASSERT(current <= end);
       return
           current < end
         ? *current
@@ -64,18 +67,38 @@ namespace cpp_pc
         ;
     }
 
-    CPP_PC__INLINE void advance ()
+    CPP_PC__INLINE std::size_t remaining () const noexcept
     {
-      ++current;
+      CPP_PC__ASSERT(current <= end);
+      return end - current;
+    }
+
+    CPP_PC__INLINE void advance () noexcept
+    {
+      CPP_PC__ASSERT(current <= end);
+      if (current < end)
+      {
+        ++current;
+      }
     }
 
     template<typename TSatisfyFunction>
-    CPP_PC__INLINE sub_string satisfy (TSatisfyFunction && satisfy_function)
+    CPP_PC__INLINE sub_string satisfy (std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function) noexcept
     {
-      auto start = current;
+      CPP_PC__ASSERT(current <= end);
+
+      auto rem = remaining ();
+
+      if (rem < at_least)
+      {
+        return sub_string (current, current);
+      }
+
+      auto start  = current;
+      auto last   = start + std::min (rem, at_most);
 
       for (
-        ; current < end && satisfy_function (static_cast<std::size_t> (current - start), *current)
+        ; current < last && satisfy_function (static_cast<std::size_t> (current - start), *current)
         ; ++current
         )
         ;
@@ -325,22 +348,29 @@ namespace cpp_pc
   CPP_PC__PRELUDE auto pright (TParser && t, TOtherParser && u);
 
   template<typename TSatisfyFunction>
-  CPP_PC__PRELUDE auto psatisfy (TSatisfyFunction && satisfy_function)
+  CPP_PC__PRELUDE auto psatisfy (std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
   {
     return detail::adapt_parser_function (
-      [satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state & s)
+      [at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state & s)
       {
-        return success (s.satisfy (satisfy_function));
+        auto result = s.satisfy (at_least, at_most, satisfy_function);
+
+        if (result.size () < at_least)
+        {
+          return failure<sub_string> ();
+        }
+
+        return success (std::move (result));
       });
   }
 
   template<typename TSatisfyFunction>
-  CPP_PC__PRELUDE auto pskip_satisfy (TSatisfyFunction && satisfy_function)
+  CPP_PC__PRELUDE auto pskip_satisfy (std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
   {
     return detail::adapt_parser_function (
-      [satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state & s)
+      [at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state & s)
       {
-        s.satisfy (satisfy_function);
+        s.satisfy (at_least, at_most, satisfy_function);
         return success (unit);
       });
   }
@@ -366,7 +396,7 @@ namespace cpp_pc
 
   CPP_PC__INLINE auto pskip_ws ()
   {
-    return pskip_satisfy (satisfy_whitespace);
+    return pskip_satisfy (0U, SIZE_MAX, satisfy_whitespace);
   }
 
   CPP_PC__INLINE auto pint ()
@@ -374,7 +404,7 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [] (state & s)
       {
-        auto ss = s.satisfy (satisfy_digit);
+        auto ss = s.satisfy (1U, 10U, satisfy_digit);
         if (ss.size () > 0)
         {
           auto i = 0;

@@ -1,9 +1,11 @@
 #pragma once
 
+#include <cassert>
 #include <type_traits>
 
 #define CPP_PC__PRELUDE constexpr
 #define CPP_PC__INLINE  inline
+#define CPP_PC__ASSERT(expr) assert(#expr && expr)
 
 namespace cpp_pc
 {
