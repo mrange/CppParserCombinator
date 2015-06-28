@@ -454,9 +454,9 @@ namespace calculator
 
   struct binary_expr : expr
   {
-    binary_expr (char op, expr::ptr left, expr::ptr right)
-      : op    (std::move (op))
-      , left  (std::move (left))
+    binary_expr (expr::ptr left, char op, expr::ptr right)
+      : left  (std::move (left))
+      , op    (std::move (op))
       , right (std::move (right))
     {
     }
@@ -482,9 +482,15 @@ namespace calculator
         ;
     }
 
-    char      op    ;
     expr::ptr left  ;
+    char      op    ;
     expr::ptr right ;
+
+    static expr::ptr create (expr::ptr left, char op, expr::ptr right)
+    {
+      return std::make_shared<binary_expr> (std::move (left), std::move (op), std::move (right));
+    }
+
   };
 
   auto satisfy_identifier = [] (std::size_t pos, char ch)
@@ -496,13 +502,19 @@ namespace calculator
         ;
     };
 
-  auto satisfy_operator = [] (std::size_t, char ch)
+  auto satisfy_mullike_op = [] (std::size_t, char ch)
+    {
+      return
+            ch == '*'
+        ||  ch == '/'
+        ;
+    };
+
+  auto satisfy_addlike_op = [] (std::size_t, char ch)
     {
       return
             ch == '+'
-        ||  ch == '+'
-        ||  ch == '*'
-        ||  ch == '/'
+        ||  ch == '-'
         ;
     };
 
@@ -519,8 +531,13 @@ namespace calculator
     >=  [] (sub_string ss) { return preturn (identifier_expr::create (ss.str ())); }
     ;
 
-  auto poperator =
-        psatisfy ("operator", 1, 1, satisfy_operator)
+  auto pmullike_operator =
+        psatisfy_char ("'*', '/'", satisfy_mullike_op)
+    >   pskip_ws ()
+    ;
+
+  auto paddlike_operator =
+        psatisfy_char ("'+', '-'", satisfy_addlike_op)
     >   pskip_ws ()
     ;
 
@@ -530,22 +547,26 @@ namespace calculator
 
   auto psub_expr        = pbetween (plparen, pfull_expr, prparen);
 
+  auto pvalue_expr      = pchoice (pint_expr, pidentifier_expr, psub_expr) > pskip_ws ();
 
-  auto pvalue_expr = pchoice (pint_expr, pidentifier_expr) > pskip_ws ();
+  auto pop0_expr        = psep (pvalue_expr , pmullike_operator, binary_expr::create);
+  auto pop1_expr        = psep (pop0_expr   , paddlike_operator, binary_expr::create);
 
   struct init_parser
   {
     init_parser ()
     {
-      pfull_trampoline->trampoline = pvalue_expr.parser_function;
+      pfull_trampoline->trampoline = pop1_expr.parser_function;
     }
   };
+
+  auto pcalculator_expr = pfull_expr > peos ();
 
   init_parser init;
 
   void parse_and_print (const std::string & input)
   {
-    auto r = parse (pvalue_expr, input);
+    auto r = parse (pcalculator_expr, input);
     if (r.value)
     {
       std::cout
@@ -573,8 +594,7 @@ namespace calculator
   {
     parse_and_print ("1234");
     parse_and_print ("abc");
-    parse_and_print ("(abc)");
-
+    parse_and_print ("1*2+2");
   }
 
 }

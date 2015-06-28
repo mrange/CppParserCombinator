@@ -182,7 +182,12 @@ namespace cpp_pc
 
     CPP_PC__INLINE result<value_type> & reposition (std::size_t p)
     {
-      position = p;
+      // TODO: How should merging work on different positions
+      if (position != p)
+      {
+        position = p;
+        error.reset ();
+      }
       return *this;
     }
 
@@ -196,17 +201,10 @@ namespace cpp_pc
     CPP_PC__INLINE result<value_type> & merge_with (result<TOther> const & o)
     {
       // TODO: How should merging work on different positions
-      /*
-      if (position < o.position)
+      if (position != o.position)
       {
       }
-      else if (o.position < position)
-      {
-        position = o.position;
-        error = o.error;
-      }
-      */
-      if (error && o.error)
+      else if (error && o.error)
       {
         error = std::make_shared<fork_error> (std::move (error), o.error);
       }
@@ -462,8 +460,8 @@ namespace cpp_pc
           if (tu.value)
           {
             return tv
-              .merge_with (tu)
               .reposition (tu.position)
+              .merge_with (tu)
               ;
           }
           else
@@ -709,10 +707,63 @@ namespace cpp_pc
         }
 
         return v
+          .reposition (ev.position)
           .merge_with (bv)
           .merge_with (ev)
-          .reposition (ev.position)
           ;
+      });
+  }
+
+  template<typename TParser, typename TSepParser, typename TCombiner>
+  CPP_PC__INLINE auto psep (
+      TParser       && parser
+    , TSepParser    && sep_parser
+    , TCombiner     && combiner
+    )
+  {
+    return detail::adapt_parser_function (
+      [
+          parser      = std::forward<TParser> (parser)
+        , sep_parser  = std::forward<TSepParser> (sep_parser)
+        , combiner    = std::forward<TCombiner> (combiner)
+      ] (state const & s, std::size_t position)
+      {
+        using value_type = detail::parser_value_type_t<TParser>;
+
+        auto v = parser (s, position);
+
+        if (!v.value)
+        {
+          return v;
+        }
+
+        auto cont = true;
+
+        while (cont)
+        {
+          auto sv = sep_parser (s, v.position);
+          v.merge_with (sv);
+          if (!sv.value)
+          {
+            cont = false;
+            continue;
+          }
+
+          auto ov = parser (s, sv.position);
+          if (!ov.value)
+          {
+            return ov
+              .merge_with (v)
+              ;
+          }
+          v.reposition (ov.position);
+          v.merge_with (ov);
+
+          CPP_PC__ASSERT (v.value);
+          CPP_PC__ASSERT (ov.value);
+          v.value = make_opt (combiner (std::move (v.value.get()), std::move (sv.value.get()), std::move (ov.value.get())));
+        }
+        return v;
       });
   }
 
@@ -733,6 +784,34 @@ namespace cpp_pc
         }
 
         return success (position + consumed, std::move (result));
+      });
+  }
+
+  template<typename TSatisfyFunction>
+  CPP_PC__INLINE auto psatisfy_char (std::string expected, TSatisfyFunction && satisfy_function)
+  {
+    auto p = psatisfy (std::move (expected), 1U, 1U, std::forward<TSatisfyFunction> (satisfy_function));
+
+    return detail::adapt_parser_function (
+      [p = std::move (p)] (state const & s, std::size_t position)
+      {
+        auto pv = p (s, position);
+
+        if (pv.value)
+        {
+          auto ss = pv.value.get ();
+          CPP_PC__ASSERT (ss.size () == 1U);
+          return success (pv.position, *ss.begin)
+            .merge_with (pv)
+            ;
+        }
+        else
+        {
+          return pv
+            .fail_as<char> ()
+            ;
+        }
+
       });
   }
 
@@ -769,6 +848,28 @@ namespace cpp_pc
   CPP_PC__INLINE auto pskip_ws ()
   {
     return pskip_satisfy (0U, SIZE_MAX, satisfy_whitespace);
+  }
+
+  namespace detail
+  {
+    auto const peos_error = std::make_shared<expected_error> ("EOS");
+  }
+
+  CPP_PC__INLINE auto peos ()
+  {
+    return detail::adapt_parser_function (
+      [] (state const & s, std::size_t position)
+      {
+        auto peek = s.peek (position);
+        if (peek == EOS)
+        {
+          return success (position, unit);
+        }
+        else
+        {
+          return failure<unit_type> (position, detail::peos_error);
+        }
+      });
   }
 
   namespace detail
