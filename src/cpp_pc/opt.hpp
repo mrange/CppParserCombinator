@@ -10,7 +10,7 @@ namespace cpp_pc
   {
   };
 
-  empty_opt_type empty_opt;
+  constexpr empty_opt_type const empty_opt;
 
   template<typename TValue>
   struct opt

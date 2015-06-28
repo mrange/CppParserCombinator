@@ -7,6 +7,19 @@
 #define CPP_PC__INLINE  inline
 #define CPP_PC__ASSERT(expr) assert(expr)
 
+#define CPP_PC__NO_COPY_MOVE(cls)           \
+  cls (cls const &)               = delete ;\
+  cls (cls &&)                    = delete ;\
+  cls & operator = (cls const &)  = delete ;\
+  cls & operator = (cls &&)       = delete ;
+
+#define CPP_PC__COPY_MOVE(cls)              \
+  cls (cls const &)               = default;\
+  cls (cls &&)                    = default;\
+  cls & operator = (cls const &)  = default;\
+  cls & operator = (cls &&)       = default;
+
+
 namespace cpp_pc
 {
   namespace detail
@@ -23,5 +36,5 @@ namespace cpp_pc
     }
   };
 
-  unit_type unit;
+  constexpr unit_type const unit;
 }

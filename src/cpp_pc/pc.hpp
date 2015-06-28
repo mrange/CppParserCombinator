@@ -8,6 +8,8 @@
 #include "common.hpp"
 #include "opt.hpp"
 
+#define CPP_PC__CHECK_PARSER(parser) static_assert (detail::is_parser<decltype (parser)>::value, "Must be a valid parser")
+
 namespace cpp_pc
 {
   CPP_PC__PRELUDE int EOS = 0xFF000001;
@@ -25,7 +27,6 @@ namespace cpp_pc
     sub_string (sub_string &&)                    = default;
     sub_string & operator = (sub_string const &)  = delete ;
     sub_string & operator = (sub_string &&)       = delete ;
-    ~sub_string ()                                = default;
 
     CPP_PC__INLINE std::string str () const
     {
@@ -43,12 +44,9 @@ namespace cpp_pc
 
   struct state
   {
+    CPP_PC__NO_COPY_MOVE (state);
+
     state ()                              = delete ;
-    state (state const &)                 = delete ;
-    state (state &&)                      = delete ;
-    state & operator = (state const &)    = delete ;
-    state & operator = (state &&)         = delete ;
-    ~state ()                             = default;
 
     state (char const * begin, char const * end) noexcept
       : begin   (begin)
@@ -114,11 +112,9 @@ namespace cpp_pc
   {
     using ptr = std::shared_ptr<base_error>;
 
+    CPP_PC__NO_COPY_MOVE (base_error);
+
     base_error ()                               = default;
-    base_error (base_error const &)             = delete ;
-    base_error (base_error &&)                  = delete ;
-    base_error & operator = (base_error const &)= delete ;
-    base_error & operator = (base_error &&)     = delete ;
     virtual ~base_error ()                      = default;
   };
 
@@ -149,12 +145,9 @@ namespace cpp_pc
   {
     using value_type = T;
 
+    CPP_PC__COPY_MOVE (result);
+
     result ()                             = delete ;
-    result (result const &)               = default;
-    result (result &&)                    = default;
-    result & operator = (result const &)  = default;
-    result & operator = (result &&)       = default;
-    ~result ()                            = default;
 
     CPP_PC__INLINE explicit result (std::size_t position, base_error::ptr error)
       : position  (std::move (position))
@@ -191,6 +184,17 @@ namespace cpp_pc
     template<typename TOther>
     CPP_PC__INLINE result<value_type> & merge_with (result<TOther> const & o)
     {
+      // TODO: How should merging work on different positions
+      /*
+      if (position < o.position)
+      {
+      }
+      else if (o.position < position)
+      {
+        position = o.position;
+        error = o.error;
+      }
+      */
       if (error && o.error)
       {
         error = std::make_shared<fork_error> (std::move (error), o.error);
@@ -199,6 +203,15 @@ namespace cpp_pc
       {
         error = o.error;
       }
+      /*
+      else if (error)
+      {
+      }
+      else
+      {
+      }
+      */
+
       return *this;
     }
 
@@ -221,14 +234,15 @@ namespace cpp_pc
   {
     using parser_function_type  = TParserFunction;
     using value_type            = TValue;
+    using result_type           = std::result_of_t<parser_function_type (state const &, std::size_t)>;
 
     parser_function_type parser_function;
-/*
+
     static_assert (
-        std::is_same<result<value_type>, std::result_of_t<parser_function_type (state const &, size_t)>::value
-      , "Must return result<_>"
+        std::is_same<result<value_type>, result_type>::value
+      , "parser_function_type must return result<_>"
       );
-*/
+
     CPP_PC__PRELUDE parser (parser_function_type const & parser_function)
       : parser_function (parser_function)
     {
@@ -254,12 +268,14 @@ namespace cpp_pc
     template<typename TParser>
     CPP_PC__PRELUDE auto operator > (TParser && parser) const
     {
+      CPP_PC__CHECK_PARSER (parser);
       return pleft (*this, std::forward<TParser> (parser));
     };
 
     template<typename TParser>
     CPP_PC__PRELUDE auto operator < (TParser && parser) const
     {
+      CPP_PC__CHECK_PARSER (parser);
       return pright (*this, std::forward<TParser> (parser));
     };
 
@@ -276,6 +292,52 @@ namespace cpp_pc
 
       return parser<value_type, parser_function_type> (std::forward<TParserFunction> (parser_function));
     }
+
+    template<typename T>
+    struct is_parser_impl
+    {
+      enum
+      {
+        value = false,
+      };
+    };
+
+    template<typename TValue, typename TParserFunction>
+    struct is_parser_impl<parser<TValue, TParserFunction>>
+    {
+      enum
+      {
+        value = true,
+      };
+    };
+
+    template<typename T>
+    struct is_parser
+    {
+      enum
+      {
+        value = is_parser_impl<strip_type_t<T>>::value,
+      };
+    };
+
+    template<typename T>
+    struct parser_value_type_impl;
+
+    template<typename TValue, typename TParserFunction>
+    struct parser_value_type_impl<parser<TValue, TParserFunction>>
+    {
+      using type = TValue ;
+    };
+
+    template<typename T>
+    struct parser_value_type
+    {
+      using type = typename parser_value_type_impl<strip_type_t<T>>::type;
+    };
+
+    template<typename T>
+    using parser_value_type_t = typename parser_value_type<T>::type;
+
   }
 
   template<typename T>
@@ -335,6 +397,8 @@ namespace cpp_pc
   template<typename TParser, typename TParserGenerator>
   CPP_PC__PRELUDE auto pbind (TParser && t, TParserGenerator && fu)
   {
+    CPP_PC__CHECK_PARSER (t);
+
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t), fu = std::forward<TParserGenerator> (fu)] (state const & s, std::size_t position)
       {
@@ -365,6 +429,9 @@ namespace cpp_pc
   template<typename TParser, typename TOtherParser>
   CPP_PC__PRELUDE auto pleft (TParser && t, TOtherParser && u)
   {
+    CPP_PC__CHECK_PARSER (t);
+    CPP_PC__CHECK_PARSER (u);
+
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state const & s, std::size_t position)
       {
@@ -404,6 +471,9 @@ namespace cpp_pc
   template<typename TParser, typename TOtherParser>
   CPP_PC__PRELUDE auto pright (TParser && t, TOtherParser && u)
   {
+    CPP_PC__CHECK_PARSER (t);
+    CPP_PC__CHECK_PARSER (u);
+
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state const & s, std::size_t position)
       {
@@ -419,13 +489,106 @@ namespace cpp_pc
         }
         else
         {
-          return tv;
+          return tv.fail_as<value_type> ();
         }
       });
   }
 
-  template<typename TParser, typename TOtherParser>
-  CPP_PC__PRELUDE auto pright (TParser && t, TOtherParser && u);
+  template<typename TParser>
+  CPP_PC__INLINE auto pbreakpoint (TParser && parser)
+  {
+    CPP_PC__CHECK_PARSER (parser);
+
+    return detail::adapt_parser_function (
+      [parser = std::forward<TParser> (parser)] (state const & s, std::size_t position)
+      {
+        CPP_PC__ASSERT ("pbreakpoint" && false);
+        return parser (s, position);
+      });
+  }
+
+  namespace detail
+  {
+    template<typename TValue, typename ...TParsers>
+    struct pchoice_impl;
+
+    template<typename TValue, typename THead>
+    struct pchoice_impl<TValue, THead>
+    {
+      using value_type = detail::parser_value_type_t<THead>;
+
+      static_assert (std::is_same<TValue, value_type>::value, "All pchoice parsers must produce values of the same value_type");
+
+      CPP_PC__COPY_MOVE (pchoice_impl);
+
+      CPP_PC__PRELUDE pchoice_impl (THead const & head)
+        : head (head)
+      {
+      }
+
+      CPP_PC__PRELUDE result<TValue> parse (state const & s, std::size_t position) const
+      {
+        return head (s, position);
+      }
+
+      THead head;
+    };
+
+    template<typename TValue, typename THead, typename... TTail>
+    struct pchoice_impl<TValue, THead, TTail...> : pchoice_impl<TValue, TTail...>
+    {
+      using base_type = pchoice_impl<TValue, TTail...>;
+      using value_type = detail::parser_value_type_t<THead>;
+
+      static_assert (std::is_same<TValue, value_type>::value, "All pchoice parsers must produce values of the same value_type");
+
+      CPP_PC__COPY_MOVE (pchoice_impl);
+
+      // TODO: Forward parsers
+      CPP_PC__PRELUDE pchoice_impl (THead const & head, TTail const &... tail)
+        : base_type (tail...)
+        , head (head)
+      {
+      }
+
+      CPP_PC__INLINE result<TValue> parse (state const & s, std::size_t position) const
+      {
+        auto hv = head (s, position);
+        if (hv.value)
+        {
+          return hv;  // TODO: Should continue to pickup error info
+        }
+        else
+        {
+          auto tv = base_type::parse (s, position);
+
+          return tv
+            .merge_with (hv)
+            ;
+        }
+      }
+
+      THead head;
+    };
+
+  }
+
+  template<typename TParser, typename ...TParsers>
+  CPP_PC__INLINE auto pchoice (TParser && parser, TParsers && ...parsers)
+  {
+    using value_type = detail::parser_value_type_t<TParser>;
+
+    detail::pchoice_impl<value_type, TParser, TParsers...> impl (
+        std::forward<TParser> (parser)
+      , std::forward<TParsers...> (parsers...)
+      );
+
+    return detail::adapt_parser_function (
+      [impl = std::move (impl)] (state const & s, std::size_t position)
+      {
+        return impl.parse (s, position);
+      });
+  }
 
   template<typename TSatisfyFunction>
   CPP_PC__INLINE auto psatisfy (std::string expected, std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
