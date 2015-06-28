@@ -58,14 +58,119 @@ namespace cpp_pc
     char const * const  end     ;
   };
 
+  struct expected_error   ;
+  struct unexpected_error ;
+  struct group_error      ;
+
+  struct error_visitor
+  {
+    CPP_PC__NO_COPY_MOVE (error_visitor);
+
+    error_visitor ()           = default;
+    virtual ~error_visitor ()  = default;
+
+    virtual void visit (expected_error &  ) = 0;
+    virtual void visit (unexpected_error &) = 0;
+    virtual void visit (group_error &     ) = 0;
+  };
+
+  struct base_error
+  {
+    using ptr = std::shared_ptr<base_error>;
+
+    CPP_PC__NO_COPY_MOVE (base_error);
+
+    base_error ()           = default;
+    virtual ~base_error ()  = default;
+
+    virtual void apply (error_visitor &) = 0;
+  };
+
+  struct expected_error : base_error
+  {
+    expected_error (std::string expected)
+      : expected (std::move (expected))
+    {
+    }
+
+    void apply (error_visitor & v) override
+    {
+      v.visit (*this);
+    }
+
+    std::string expected ;
+  };
+
+  struct unexpected_error : base_error
+  {
+    unexpected_error (std::string unexpected)
+      : unexpected (std::move (unexpected))
+    {
+    }
+
+    void apply (error_visitor & v) override
+    {
+      v.visit (*this);
+    }
+
+    std::string unexpected ;
+  };
+
+  struct group_error : base_error
+  {
+    using group_type = std::vector<base_error::ptr>;
+
+    group_error (group_type g)
+      : group (std::move (g))
+    {
+    }
+
+    void apply (error_visitor & v) override
+    {
+      v.visit (*this);
+    }
+
+    group_type group;
+  };
+
+  namespace detail
+  {
+    struct collect_error_visitor : error_visitor
+    {
+      std::vector<std::string>  expected  ;
+      std::vector<std::string>  unexpected;
+
+      void visit (expected_error & e) override
+      {
+        expected.push_back (e.expected);
+      }
+
+      void visit (unexpected_error & e) override
+      {
+        unexpected.push_back (e.unexpected);
+      }
+
+      void visit (group_error & e) override
+      {
+        for (auto && g : e.group)
+        {
+          if (g)
+          {
+            g->apply (*this);
+          }
+        }
+      }
+    };
+  }
+
   struct state
   {
     CPP_PC__NO_COPY_MOVE (state);
 
     state ()                              = delete ;
 
-    state (bool collect_error, char const * begin, char const * end) noexcept
-      : collect_error (collect_error)
+    state (std::size_t error_position, char const * begin, char const * end) noexcept
+      : error_position(error_position)
       , begin         (begin)
       , end           (end)
     {
@@ -120,245 +225,27 @@ namespace cpp_pc
       return sub_string (start, current);
     }
 
-    bool const          collect_error ;
-    char const * const  begin         ;
-    char const * const  end           ;
-  };
-
-  struct expected_error   ;
-  struct unexpected_error ;
-  struct fork_error       ;
-  struct group_error      ;
-
-  struct error_visitor
-  {
-    CPP_PC__NO_COPY_MOVE (error_visitor);
-
-    error_visitor ()           = default;
-    virtual ~error_visitor ()  = default;
-
-    virtual void visit (expected_error &  ) = 0;
-    virtual void visit (unexpected_error &) = 0;
-    virtual void visit (fork_error &      ) = 0;
-    virtual void visit (group_error &     ) = 0;
-  };
-
-  struct base_error
-  {
-    using ptr = std::shared_ptr<base_error>;
-
-    CPP_PC__NO_COPY_MOVE (base_error);
-
-    base_error ()           = default;
-    virtual ~base_error ()  = default;
-
-    virtual void apply (error_visitor &) = 0;
-  };
-
-  struct expected_error : base_error
-  {
-    expected_error (std::string expected)
-      : expected (std::move (expected))
+    CPP_PC__INLINE void append_error (std::size_t position, base_error::ptr const & error) const
     {
-    }
-
-    void apply (error_visitor & v) override
-    {
-      v.visit (*this);
-    }
-
-    std::string expected ;
-  };
-
-  struct unexpected_error : base_error
-  {
-    unexpected_error (std::string unexpected)
-      : unexpected (std::move (unexpected))
-    {
-    }
-
-    void apply (error_visitor & v) override
-    {
-      v.visit (*this);
-    }
-
-    std::string unexpected ;
-  };
-
-  struct fork_error : base_error
-  {
-    fork_error (base_error::ptr left, base_error::ptr right)
-      : left  (std::move (left))
-      , right (std::move (right))
-    {
-    }
-
-    void apply (error_visitor & v) override
-    {
-      v.visit (*this);
-    }
-
-    base_error::ptr left ;
-    base_error::ptr right;
-  };
-
-  struct group_error : base_error
-  {
-    using group_type = std::vector<base_error::ptr>;
-
-    group_error (group_type g)
-      : group (std::move (g))
-    {
-    }
-
-    void apply (error_visitor & v) override
-    {
-      v.visit (*this);
-    }
-
-    group_type group;
-  };
-
-  namespace detail
-  {
-    struct collect_error_visitor : error_visitor
-    {
-      std::vector<std::string>  expected  ;
-      std::vector<std::string>  unexpected;
-
-      void visit (expected_error & e) override
+      if (position == error_position && error)
       {
-        expected.push_back (e.expected);
+        errors.push_back (error);
       }
-
-      void visit (unexpected_error & e) override
-      {
-        unexpected.push_back (e.unexpected);
-      }
-
-      void visit (fork_error & e) override
-      {
-        if (e.left)
-        {
-          e.left->apply (*this);
-        }
-
-        if (e.right)
-        {
-          e.right->apply (*this);
-        }
-      }
-
-      void visit (group_error & e) override
-      {
-        for (auto && g : e.group)
-        {
-          if (g)
-          {
-            g->apply (*this);
-          }
-        }
-      }
-    };
-  }
-
-  template<typename T>
-  struct result
-  {
-    using value_type = T;
-
-    CPP_PC__COPY_MOVE (result);
-
-    result ()                             = delete ;
-
-    CPP_PC__INLINE explicit result (std::size_t position, base_error::ptr error)
-      : begin     (position)
-      , end       (position)
-      , error     (std::move (error))
-    {
-    }
-
-    CPP_PC__INLINE explicit result (std::size_t begin, std::size_t end, T o, base_error::ptr error)
-      : begin     (begin)
-      , end       (end)
-      , value     (std::move (o))
-      , error     (std::move (error))
-    {
-    }
-
-    CPP_PC__PRELUDE bool operator == (result const & o) const
-    {
-      return
-            begin == o.begin
-        &&  end   == o.end
-        &&  value == o.value
-        ;
-    }
-
-    CPP_PC__INLINE result<value_type> & reposition (std::size_t b, std::size_t e)
-    {
-      if (begin != b)
-      {
-        error.reset ();
-      }
-      begin = b;
-      end = e;
-      return *this;
-    }
-
-    template<typename TOther>
-    CPP_PC__PRELUDE result<TOther> fail_as () const
-    {
-      return result<TOther> (end, error);
-    }
-
-    template<typename TOther>
-    CPP_PC__INLINE result<value_type> & merge_with (result<TOther> const & o)
-    {
-      // TODO: How should merging work on different positions
-      if (begin != o.begin)
-      {
-      }
-      else if (error && o.error)
-      {
-        error = std::make_shared<fork_error> (std::move (error), o.error);
-      }
-      else if (o.error)
-      {
-        error = o.error;
-      }
-      /*
-      else if (error)
-      {
-      }
-      else
-      {
-      }
-      */
-
-      return *this;
-    }
-
-    CPP_PC__INLINE result<value_type> & set_error (base_error::ptr e)
-    {
-      error = std::move (e);
-      return *this;
     }
 
     std::string error_description () const
     {
-      if (!error)
-      {
-        return "No error detected";
-      }
-
       std::stringstream o;
-      o
-          << "Error detected at position " << begin + 1;
-          ;
+      o 
+        << "While parsing: " << std::string (begin, end) << std::endl
+        << "Error detected at position " << error_position + 1;
+        ;
 
       detail::collect_error_visitor visitor;
-      error->apply (visitor);
+      for (auto && error : errors)
+      {
+        error->apply (visitor);
+      }
 
       if (!visitor.expected.empty ())
       {
@@ -429,11 +316,56 @@ namespace cpp_pc
       return o.str ();
     }
 
-    std::size_t     begin     ;
-    std::size_t     end       ;
 
+    std::size_t const                     error_position;
+    char const * const                    begin         ;
+    char const * const                    end           ;
+
+    std::vector<base_error::ptr> mutable  errors        ;
+  };
+
+  template<typename T>
+  struct result
+  {
+    using value_type = T;
+
+    CPP_PC__COPY_MOVE (result);
+
+    result ()                             = delete ;
+
+    CPP_PC__INLINE explicit result (std::size_t position)
+      : end       (position)
+    {
+    }
+
+    CPP_PC__INLINE explicit result (std::size_t position, T o)
+      : end       (position)
+      , value     (std::move (o))
+    {
+    }
+
+    CPP_PC__PRELUDE bool operator == (result const & o) const
+    {
+      return
+            end   == o.end
+        &&  value == o.value
+        ;
+    }
+
+    CPP_PC__INLINE result<value_type> & reposition (std::size_t e)
+    {
+      end = e;
+      return *this;
+    }
+
+    template<typename TOther>
+    CPP_PC__PRELUDE result<TOther> fail_as () const
+    {
+      return result<TOther> (end);
+    }
+
+    std::size_t     end       ;
     opt<T>          value     ;
-    base_error::ptr error     ;
   };
 
   template<typename TParser, typename TParserGenerator>
@@ -563,25 +495,68 @@ namespace cpp_pc
   }
 
   template<typename T>
-  CPP_PC__PRELUDE auto success (std::size_t begin, std::size_t end, T && v, base_error::ptr error)
+  CPP_PC__PRELUDE auto success (std::size_t end, T && v)
   {
-    return result<detail::strip_type_t<T>> (begin, end, std::forward<T> (v), std::move (error));
+    return result<detail::strip_type_t<T>> (end, std::forward<T> (v));
   }
 
   template<typename T>
-  CPP_PC__INLINE auto failure (std::size_t position, base_error::ptr error)
+  CPP_PC__INLINE auto failure (std::size_t position)
   {
-    return result<T> (position, std::move (error));
+    return result<T> (position);
   }
+
+  template<typename TValueType, typename TParserFunction>
+  CPP_PC__INLINE auto plain_parse (parser<TValueType, TParserFunction> const & p, std::string const & i)
+  {
+    auto begin  = i.c_str ();
+    auto end    = begin + i.size ();
+
+    state s (SIZE_MAX, begin, end);
+    return p (s, 0);
+  }
+
+  template<typename T>
+  struct parse_result
+  {
+    CPP_PC__COPY_MOVE (parse_result);
+
+    parse_result (std::size_t consumed, opt<T> value, std::string message)
+      : consumed(consumed)
+      , value   (std::move (value))
+      , message (std::move (message))
+    {
+    }
+
+    std::size_t consumed;
+    opt<T>      value   ;
+    std::string message ;
+  };
 
   template<typename TValueType, typename TParserFunction>
   CPP_PC__INLINE auto parse (parser<TValueType, TParserFunction> const & p, std::string const & i)
   {
     auto begin  = i.c_str ();
     auto end    = begin + i.size ();
-    state s (true, begin, end);
 
-    return p (s, 0);
+    {
+      state s (SIZE_MAX, begin, end);
+      auto v = p (s, 0);
+      if (v.value)
+      {
+        return parse_result<TValueType> (v.end, std::move (v.value), std::string ());
+      }
+      else
+      {
+        state es (v.end, begin, end);
+        auto ev = p (es, 0);
+
+        CPP_PC__ASSERT (v.end == ev.end);
+        CPP_PC__ASSERT (!ev.value);
+
+        return parse_result<TValueType> (ev.end, empty_opt, es.error_description ());
+      }
+    }
   }
 
   auto satisfy_digit = [] (std::size_t, char ch)
@@ -612,7 +587,7 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [v = std::forward<TValue> (v)] (state const & s, std::size_t position)
       {
-        return success (position, position, v, nullptr);
+        return success (position, v);
       });
   }
 
@@ -634,8 +609,7 @@ namespace cpp_pc
           auto tu = fu (std::move (tv.value.get ())) (s, tv.end);
 
           return tu
-            .reposition (position, tu.end)
-            .merge_with (tv)
+            .reposition (tu.end)
             ;
         }
         else
@@ -670,8 +644,7 @@ namespace cpp_pc
           if (tu.value)
           {
             return tv
-              .reposition (position, tu.end)
-              .merge_with (tu)
+              .reposition (tu.end)
               ;
           }
           else
@@ -682,8 +655,7 @@ namespace cpp_pc
 #else
               .template fail_as<value_type> ()
 #endif
-              .reposition (position, tu.end)
-              .merge_with (tv)
+              .reposition (tu.end)
               ;
           }
         }
@@ -711,8 +683,7 @@ namespace cpp_pc
         {
           auto tu = u (s, tv.end);
           return tu
-            .reposition (position, tu.end)
-            .merge_with (tv)
+            .reposition (tu.end)
             ;
         }
         else
@@ -730,8 +701,6 @@ namespace cpp_pc
 
   namespace detail
   {
-    auto const ptrampoline_error = std::make_shared<unexpected_error> ("empty trampoline");
-
     template<typename TValue>
     struct ptrampoline_payload
     {
@@ -768,7 +737,7 @@ namespace cpp_pc
         }
         else
         {
-          return result<TValue> (position, detail::ptrampoline_error);
+          return result<TValue> (position);
         }
       });
   }
@@ -805,13 +774,9 @@ namespace cpp_pc
       {
       }
 
-      CPP_PC__INLINE result<TValue> parse (group_error::group_type * g, state const & s, std::size_t position) const
+      CPP_PC__INLINE result<TValue> parse (state const & s, std::size_t position) const
       {
         auto hv = head (s, position);
-        if (g)
-        {
-          g->push_back (hv.error);
-        }
         return hv;
       }
 
@@ -835,26 +800,21 @@ namespace cpp_pc
       {
       }
 
-      CPP_PC__INLINE result<TValue> parse (group_error::group_type * g, state const & s, std::size_t position) const
+      CPP_PC__INLINE result<TValue> parse (state const & s, std::size_t position) const
       {
         auto hv = head (s, position);
         if (hv.value)
         {
-          if (g)
+          if (s.error_position == position)
           {
-            g->push_back (hv.error);
             // In order to collect error info
-            base_type::parse (g, s, position);
+            base_type::parse (s, position);
           }
           return hv;
         }
         else
         {
-          if (g)
-          {
-            g->push_back (hv.error);
-          }
-          return base_type::parse (g, s, position);
+          return base_type::parse (s, position);
         }
       }
 
@@ -877,17 +837,14 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [impl = std::move (impl)] (state const & s, std::size_t position)
       {
-        if (s.collect_error)
+        if (s.error_position == position)
         {
-          group_error::group_type g;
-          auto tv = impl.parse (&g, s, position);
-          return tv
-            .set_error (std::make_shared<group_error> (std::move (g)))
-            ;
+          auto tv = impl.parse (s, position);
+          return tv;
         }
         else
         {
-          return impl.parse (nullptr, s, position);
+          return impl.parse (s, position);
         }
       });
   }
@@ -923,9 +880,7 @@ namespace cpp_pc
         auto v = parser (s, bv.end);
         if (!v.value)
         {
-          return v
-            .merge_with (bv)
-            ;
+          return v;
         }
 
         auto ev = end_parser (s, v.end);
@@ -937,15 +892,11 @@ namespace cpp_pc
 #else
             .template fail_as<value_type> ()
 #endif
-            .merge_with (v)
-            .merge_with (bv)
             ;
         }
 
         return v
-          .reposition (position, ev.end)
-          .merge_with (bv)
-          .merge_with (ev)
+          .reposition (ev.end)
           ;
       });
   }
@@ -978,7 +929,6 @@ namespace cpp_pc
         while (cont)
         {
           auto sv = sep_parser (s, v.end);
-          v.merge_with (sv);
           if (!sv.value)
           {
             cont = false;
@@ -989,11 +939,9 @@ namespace cpp_pc
           if (!ov.value)
           {
             return ov
-              .merge_with (v)
               ;
           }
-          v.reposition (position, ov.end);
-          v.merge_with (ov);
+          v.reposition (ov.end);
 
           CPP_PC__ASSERT (v.value);
           CPP_PC__ASSERT (ov.value);
@@ -1011,15 +959,17 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [error = std::move (error), at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
       {
+        s.append_error (position, error);
+
         auto result = s.satisfy (position, at_least, at_most, satisfy_function);
 
         auto consumed = result.size ();
         if (consumed < at_least)
         {
-          return failure<sub_string> (position, error);
+          return failure<sub_string> (position);
         }
 
-        return success (position, position + consumed, std::move (result), error);
+        return success (position + consumed, std::move (result));
       });
   }
 
@@ -1037,7 +987,7 @@ namespace cpp_pc
         {
           auto ss = pv.value.get ();
           CPP_PC__ASSERT (ss.size () == 1U);
-          return success (position, pv.end, *ss.begin, std::move (pv.error));
+          return success (pv.end, *ss.begin);
         }
         else
         {
@@ -1060,7 +1010,7 @@ namespace cpp_pc
       [at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
       {
         auto ss = s.satisfy (position, at_least, at_most, satisfy_function);
-        return success (position, position + ss.size (), unit, nullptr);  // TODO: Add error
+        return success (position + ss.size (), unit);  // TODO: Add error
       });
   }
 
@@ -1071,14 +1021,16 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [ch, error = std::move (error)] (state const & s, std::size_t position)
       {
+        s.append_error (position, error);
+
         auto peek = s.peek (position);
         if (peek == ch)
         {
-          return success (position, position + 1, unit, error);
+          return success (position + 1, unit);
         }
         else
         {
-          return failure<unit_type> (position, error);
+          return failure<unit_type> (position);
         }
       });
   }
@@ -1098,14 +1050,16 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [] (state const & s, std::size_t position)
       {
+        s.append_error (position, detail::peos_error);
+
         auto peek = s.peek (position);
         if (peek == EOS)
         {
-          return success (position, position, unit, detail::peos_error);
+          return success (position, unit);
         }
         else
         {
-          return failure<unit_type> (position, detail::peos_error);
+          return failure<unit_type> (position);
         }
       });
   }
@@ -1120,6 +1074,8 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [] (state const & s, std::size_t position)
       {
+        s.append_error (position, detail::pint_error);
+
         auto ss = s.satisfy (position, 1U, 10U, satisfy_digit);
         auto consumed = ss.size ();
         if (consumed > 0)
@@ -1129,11 +1085,11 @@ namespace cpp_pc
           {
             i = 10*i + (*iter - '0');
           }
-          return success (position, position + consumed, i, detail::pint_error);
+          return success (position + consumed, i);
         }
         else
         {
-          return failure<int> (position, detail::pint_error);
+          return failure<int> (position);
         }
       });
   }

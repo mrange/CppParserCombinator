@@ -116,8 +116,6 @@ namespace test_parser
   {
     o
       << "{result: "
-      << v.begin
-      << ", "
       << v.end
       << ", "
       << v.value
@@ -272,14 +270,13 @@ namespace test_parser
   void test_parser ()
   {
     std::string input = "1234 + 5678";
-    auto error = std::make_shared<expected_error> ("expected");
 
     {
       auto p =
             preturn (3)
         ;
-      result<int> expected  = success (0, 0, 3, nullptr);
-      result<int> actual    = parse (p, input);
+      result<int> expected  = success (0, 3);
+      result<int> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 
@@ -288,8 +285,8 @@ namespace test_parser
             preturn (3)
         >=  [] (int v) { return preturn (std::make_tuple (v, 4)); }
         ;
-      result<std::tuple<int,int>> expected  = success (0, 0, std::make_tuple (3, 4), nullptr);
-      result<std::tuple<int,int>> actual    = parse (p, input);
+      result<std::tuple<int,int>> expected  = success (0, std::make_tuple (3, 4));
+      result<std::tuple<int,int>> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 
@@ -298,8 +295,8 @@ namespace test_parser
             psatisfy ("digits", 1U, 10U, satisfy_digit)
         >=  [] (auto && v) { return preturn (v.str ()); }
         ;
-      result<std::string> expected  = success (0, 4, std::string ("1234"), nullptr);
-      result<std::string> actual    = parse (p, input);
+      result<std::string> expected  = success (4, std::string ("1234"));
+      result<std::string> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 
@@ -307,8 +304,8 @@ namespace test_parser
       auto p =
             pskip_char ('1')
         ;
-      result<unit_type> expected  = success (0, 1, unit, nullptr);
-      result<unit_type> actual    = parse (p, input);
+      result<unit_type> expected  = success (1, unit);
+      result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 
@@ -316,8 +313,8 @@ namespace test_parser
       auto p =
             pskip_char ('2')
         ;
-      result<unit_type> expected  = failure<unit_type> (0, error);
-      result<unit_type> actual    = parse (p, input);
+      result<unit_type> expected  = failure<unit_type> (0);
+      result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 
@@ -326,8 +323,8 @@ namespace test_parser
             pskip_char ('1')
         >   pskip_char ('2')
         ;
-      result<unit_type> expected  = success (0, 2, unit, nullptr);
-      result<unit_type> actual    = parse (p, input);
+      result<unit_type> expected  = success (2, unit);
+      result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 
@@ -336,8 +333,8 @@ namespace test_parser
             pskip_char ('1')
         >   pskip_char ('1')
         ;
-      result<unit_type> expected  = failure<unit_type> (1, error);
-      result<unit_type> actual    = parse (p, input);
+      result<unit_type> expected  = failure<unit_type> (1);
+      result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 
@@ -346,8 +343,8 @@ namespace test_parser
             pskip_char ('1')
         <   pskip_char ('2')
         ;
-      result<unit_type> expected  = success (0, 2, unit, nullptr);
-      result<unit_type> actual    = parse (p, input);
+      result<unit_type> expected  = success (2, unit);
+      result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 
@@ -356,8 +353,8 @@ namespace test_parser
             pskip_char ('1')
         <   pskip_char ('1')
         ;
-      result<unit_type> expected  = failure<unit_type> (1, error);
-      result<unit_type> actual    = parse (p, input);
+      result<unit_type> expected  = failure<unit_type> (1);
+      result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 
@@ -365,8 +362,8 @@ namespace test_parser
       auto p =
             pint ()
         ;
-      result<int> expected  = success (0, 4, 1234, nullptr);
-      result<int> actual    = parse (p, input);
+      result<int> expected  = success (4, 1234);
+      result<int> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 
@@ -374,8 +371,8 @@ namespace test_parser
       auto p =
             pskip_ws ()
         ;
-      result<unit_type> expected  = success (0, 0, unit, nullptr);
-      result<unit_type> actual    = parse (p, input);
+      result<unit_type> expected  = success (0, unit);
+      result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 
@@ -387,8 +384,8 @@ namespace test_parser
         >   pskip_ws ()
         >=  [] (int v) { return pint () >= [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
         ;
-      result<std::tuple<int,int>> expected  = success (0, 11, std::make_tuple (1234, 5678), nullptr);
-      result<std::tuple<int,int>> actual    = parse (p, input);
+      result<std::tuple<int,int>> expected  = success (11, std::make_tuple (1234, 5678));
+      result<std::tuple<int,int>> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 
@@ -400,8 +397,8 @@ namespace test_parser
         >   pskip_ws ()
         >=  [] (int v) { return pint () >= [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
         ;
-      result<std::tuple<int,int>> expected  = failure<std::tuple<int,int>> (5, error);
-      result<std::tuple<int,int>> actual    = parse (p, input);
+      result<std::tuple<int,int>> expected  = failure<std::tuple<int,int>> (5);
+      result<std::tuple<int,int>> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 
@@ -644,11 +641,7 @@ namespace calculator
     }
     else
     {
-      auto msg = r.error_description ();
-      std::cout
-        << "Failed to parse: " << input << std::endl
-        << msg << std::endl
-        ;
+      std::cout << r.message << std::endl;
     }
   }
 
