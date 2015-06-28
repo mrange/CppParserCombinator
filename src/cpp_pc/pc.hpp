@@ -64,9 +64,10 @@ namespace cpp_pc
 
     state ()                              = delete ;
 
-    state (char const * begin, char const * end) noexcept
-      : begin   (begin)
-      , end     (end)
+    state (bool collect_error, char const * begin, char const * end) noexcept
+      : collect_error (collect_error)
+      , begin         (begin)
+      , end           (end)
     {
       CPP_PC__ASSERT(begin <= end);
     }
@@ -119,14 +120,15 @@ namespace cpp_pc
       return sub_string (start, current);
     }
 
-  private:
-    char const * const  begin   ;
-    char const * const  end     ;
+    bool const          collect_error ;
+    char const * const  begin         ;
+    char const * const  end           ;
   };
 
   struct expected_error   ;
   struct unexpected_error ;
   struct fork_error       ;
+  struct group_error      ;
 
   struct error_visitor
   {
@@ -138,6 +140,7 @@ namespace cpp_pc
     virtual void visit (expected_error &  ) = 0;
     virtual void visit (unexpected_error &) = 0;
     virtual void visit (fork_error &      ) = 0;
+    virtual void visit (group_error &     ) = 0;
   };
 
   struct base_error
@@ -152,7 +155,7 @@ namespace cpp_pc
     virtual void apply (error_visitor &) = 0;
   };
 
-  struct expected_error : base_error, std::enable_shared_from_this<expected_error>
+  struct expected_error : base_error
   {
     expected_error (std::string expected)
       : expected (std::move (expected))
@@ -167,7 +170,7 @@ namespace cpp_pc
     std::string expected ;
   };
 
-  struct unexpected_error : base_error, std::enable_shared_from_this<unexpected_error>
+  struct unexpected_error : base_error
   {
     unexpected_error (std::string unexpected)
       : unexpected (std::move (unexpected))
@@ -182,7 +185,7 @@ namespace cpp_pc
     std::string unexpected ;
   };
 
-  struct fork_error : base_error, std::enable_shared_from_this<fork_error>
+  struct fork_error : base_error
   {
     fork_error (base_error::ptr left, base_error::ptr right)
       : left  (std::move (left))
@@ -199,21 +202,38 @@ namespace cpp_pc
     base_error::ptr right;
   };
 
+  struct group_error : base_error
+  {
+    using group_type = std::vector<base_error::ptr>;
+
+    group_error (group_type g)
+      : group (std::move (g))
+    {
+    }
+
+    void apply (error_visitor & v) override
+    {
+      v.visit (*this);
+    }
+
+    group_type group;
+  };
+
   namespace detail
   {
     struct collect_error_visitor : error_visitor
     {
-      std::vector<std::shared_ptr<expected_error>>    expected  ;
-      std::vector<std::shared_ptr<unexpected_error>>  unexpected;
+      std::vector<std::string>  expected  ;
+      std::vector<std::string>  unexpected;
 
       void visit (expected_error & e) override
       {
-        expected.push_back (e.shared_from_this ());
+        expected.push_back (e.expected);
       }
 
       void visit (unexpected_error & e) override
       {
-        unexpected.push_back (e.shared_from_this ());
+        unexpected.push_back (e.unexpected);
       }
 
       void visit (fork_error & e) override
@@ -226,6 +246,17 @@ namespace cpp_pc
         if (e.right)
         {
           e.right->apply (*this);
+        }
+      }
+
+      void visit (group_error & e) override
+      {
+        for (auto && g : e.group)
+        {
+          if (g)
+          {
+            g->apply (*this);
+          }
         }
       }
     };
@@ -249,6 +280,13 @@ namespace cpp_pc
     CPP_PC__PRELUDE explicit result (std::size_t position, T o)
       : position  (std::move (position))
       , value     (std::move (o))
+    {
+    }
+
+    CPP_PC__INLINE explicit result (std::size_t position, T o, base_error::ptr error)
+      : position  (std::move (position))
+      , value     (std::move (o))
+      , error     (std::move (error))
     {
     }
 
@@ -304,6 +342,12 @@ namespace cpp_pc
       return *this;
     }
 
+    CPP_PC__INLINE result<value_type> & set_error (base_error::ptr e)
+    {
+      error = std::move (e);
+      return *this;
+    }
+
     std::string error_description () const
     {
       if (!error)
@@ -321,16 +365,19 @@ namespace cpp_pc
 
       if (!visitor.expected.empty ())
       {
+        auto & vs = visitor.expected;
+        std::sort (vs.begin (), vs.end ());
+        vs.erase (std::unique (vs.begin (), vs.end ()), vs.end ());
+        
         o
           << std::endl
           << "  Expected"
           ;
 
-        auto sz = visitor.expected.size ();
+        auto sz = vs.size ();
         for (auto iter = 0U; iter < sz; ++iter)
         {
-          auto & e = visitor.expected[iter];
-          CPP_PC__ASSERT (e);
+          auto & e = vs[iter];
 
           if (iter == 0)
           {
@@ -345,22 +392,25 @@ namespace cpp_pc
             o << ", ";
           }
 
-          o << e->expected;
+          o << e;
         }
       }
 
       if (!visitor.unexpected.empty ())
       {
+        auto & vs = visitor.expected;
+        std::sort (vs.begin (), vs.end ());
+        vs.erase (std::unique (vs.begin (), vs.end ()), vs.end ());
+
         o
           << std::endl
           << "  Unexpected"
           ;
 
-        auto sz = visitor.unexpected.size ();
+        auto sz = vs.size ();
         for (auto iter = 0U; iter < sz; ++iter)
         {
-          auto & ue = visitor.unexpected[iter];
-          CPP_PC__ASSERT (ue);
+          auto & ue = vs[iter];
 
           if (iter == 0)
           {
@@ -375,7 +425,7 @@ namespace cpp_pc
             o << ", ";
           }
 
-          o << ue->unexpected;
+          o << ue;
         }
       }
 
@@ -514,6 +564,18 @@ namespace cpp_pc
   }
 
   template<typename T>
+  CPP_PC__INLINE auto make_result (std::size_t position, opt<T> o, base_error::ptr error)
+  {
+#if _MSC_VER
+    auto r = result<T> (std::move (position), std::move (error));
+    r.value = std::move (o);
+    return r;
+#else
+    return result<T> (std::move (position), std::move (o), std::move (error));
+#endif
+  }
+
+  template<typename T>
   CPP_PC__PRELUDE auto success (std::size_t position, T && v)
   {
     return result<detail::strip_type_t<T>> (position, std::forward<T> (v));
@@ -530,7 +592,7 @@ namespace cpp_pc
   {
     auto begin  = i.c_str ();
     auto end    = begin + i.size ();
-    state s (begin, end);
+    state s (true, begin, end);
 
     return p (s, 0);
   }
@@ -750,9 +812,14 @@ namespace cpp_pc
       {
       }
 
-      CPP_PC__PRELUDE result<TValue> parse (state const & s, std::size_t position) const
+      CPP_PC__INLINE result<TValue> parse (group_error::group_type * g, state const & s, std::size_t position) const
       {
-        return head (s, position);
+        auto hv = head (s, position);
+        if (g)
+        {
+          g->push_back (hv.error);
+        }
+        return hv;
       }
 
       THead head;
@@ -775,20 +842,26 @@ namespace cpp_pc
       {
       }
 
-      CPP_PC__INLINE result<TValue> parse (state const & s, std::size_t position) const
+      CPP_PC__INLINE result<TValue> parse (group_error::group_type * g, state const & s, std::size_t position) const
       {
         auto hv = head (s, position);
         if (hv.value)
         {
-          return hv;  // TODO: Should continue to pickup error info
+          if (g)
+          {
+            g->push_back (hv.error);
+            // In order to collect error info
+            base_type::parse (g, s, position);
+          }
+          return hv;
         }
         else
         {
-          auto tv = base_type::parse (s, position);
-
-          return tv
-            .merge_with (hv)
-            ;
+          if (g)
+          {
+            g->push_back (hv.error);
+          }
+          return base_type::parse (g, s, position);
         }
       }
 
@@ -811,7 +884,18 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [impl = std::move (impl)] (state const & s, std::size_t position)
       {
-        return impl.parse (s, position);
+        if (s.collect_error)
+        {
+          group_error::group_type g;
+          auto tv = impl.parse (&g, s, position);
+          return tv
+            .set_error (std::move (std::make_shared<group_error> (std::move (g))))
+            ;
+        }
+        else
+        {
+          return impl.parse (nullptr, s, position);
+        }
       });
   }
 
