@@ -1,6 +1,7 @@
 #include "stdafx.h"
 
 #include <iostream>
+#include <map>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -384,12 +385,23 @@ namespace test_parser
       result<std::tuple<int,int>> actual    = parse (p, input);
       TEST_EQ (expected, actual);
     }
+
+    // TODO:
+    // pchoice
+    // psatisfy_char
+    // ptrampoline
+    // pbreakpoint
+    // pbetween
+    // psep
+    // peos
   }
 }
 
 namespace calculator
 {
   using namespace cpp_pc;
+
+  using variables = std::map<std::string, int>;
 
   struct expr
   {
@@ -402,8 +414,8 @@ namespace calculator
     expr & operator = (expr &&)     = delete ;
     virtual ~expr ()                = default;
 
-    virtual void build_string (std::ostream & o) = 0;
-
+    virtual void  build_string (std::ostream & o) const = 0;
+    virtual int   eval (variables const & vs) const     = 0;
   };
 
   struct int_expr : expr
@@ -413,9 +425,14 @@ namespace calculator
     {
     }
 
-    void build_string (std::ostream & o) override
+    void build_string (std::ostream & o) const override
     {
       o << value;
+    }
+
+    int eval (variables const & vs) const override
+    {
+      return value;
     }
 
     int value;
@@ -434,16 +451,26 @@ namespace calculator
     {
     }
 
-    void build_string (std::ostream & o) override
+    void build_string (std::ostream & o) const override
     {
-      o
-        << '\''
-        << id
-        << '\''
-        ;
+      o << id;
     }
 
     std::string id;
+
+    int eval (variables const & vs) const override
+    {
+      auto find = vs.find (id);
+      if (find != vs.end ())
+      {
+        return find->second;
+      }
+      else
+      {
+        // TODO: Error handler
+        return 0;
+      }
+    }
 
     static expr::ptr create (std::string id)
     {
@@ -461,7 +488,7 @@ namespace calculator
     {
     }
 
-    void build_string (std::ostream & o) override
+    void build_string (std::ostream & o) const override
     {
       o
         << '('
@@ -480,6 +507,28 @@ namespace calculator
       o
         << ')'
         ;
+    }
+
+    int eval (variables const & vs) const override
+    {
+      auto l = left->eval (vs);
+      auto r = right->eval (vs);
+      switch (op)
+      {
+      default:
+        // Error handling
+        return 0;
+      case '+':
+        return l + r;
+      case '-':
+        return l - r;
+      case '*':
+        return l * r;
+      case '/':
+        return l / r;
+      case '%':
+        return l % r;
+      }
     }
 
     expr::ptr left  ;
@@ -507,6 +556,7 @@ namespace calculator
       return
             ch == '*'
         ||  ch == '/'
+        ||  ch == '%'
         ;
     };
 
@@ -521,36 +571,26 @@ namespace calculator
   auto pfull_trampoline = create_trampoline_payload<expr::ptr> ();
   auto pfull_expr       = ptrampoline<expr::ptr> (pfull_trampoline);
 
+  auto psub_expr        = pbetween (pskip_char ('(') > pskip_ws (), pfull_expr, pskip_char (')'));
   auto pint_expr        =
         pint ()
     >=  [] (int v) { return preturn (int_expr::create (v)); }
     ;
-
   auto pidentifier_expr =
         psatisfy ("identifier", 1, SIZE_MAX, satisfy_identifier)
     >=  [] (sub_string ss) { return preturn (identifier_expr::create (ss.str ())); }
     ;
-
-  auto pmullike_operator =
+  auto pmullike_op =
         psatisfy_char ("'*', '/'", satisfy_mullike_op)
     >   pskip_ws ()
     ;
-
-  auto paddlike_operator =
+  auto paddlike_op =
         psatisfy_char ("'+', '-'", satisfy_addlike_op)
     >   pskip_ws ()
     ;
-
-  auto plparen          = pskip_char ('(') > pskip_ws ();
-
-  auto prparen          = pskip_char (')') > pskip_ws ();
-
-  auto psub_expr        = pbetween (plparen, pfull_expr, prparen);
-
   auto pvalue_expr      = pchoice (pint_expr, pidentifier_expr, psub_expr) > pskip_ws ();
-
-  auto pop0_expr        = psep (pvalue_expr , pmullike_operator, binary_expr::create);
-  auto pop1_expr        = psep (pop0_expr   , paddlike_operator, binary_expr::create);
+  auto pop0_expr        = psep (pvalue_expr , pmullike_op, binary_expr::create);
+  auto pop1_expr        = psep (pop0_expr   , paddlike_op, binary_expr::create);
 
   struct init_parser
   {
@@ -564,20 +604,27 @@ namespace calculator
 
   init_parser init;
 
+  variables const vars 
+  {
+    {"x"  , 3},
+    {"y"  , 5},
+  };
+
   void parse_and_print (const std::string & input)
   {
     auto r = parse (pcalculator_expr, input);
     if (r.value)
     {
-      std::cout
-        << "Parsed: " << input
-        << " as: "
-        ;
+      auto expr = r.value.get ();
+      auto v = expr->eval (vars);
 
-      r.value.get ()->build_string (std::cout);
+      std::stringstream o;
+      expr->build_string (o);
 
       std::cout
-        << std::endl
+        << "Parsed: " << input << std::endl
+        << "  as  : " << o.str () << std::endl
+        << "  eval: " << v << std::endl
         ;
     }
     else
@@ -592,9 +639,22 @@ namespace calculator
 
   void test_calculator ()
   {
+    std::cout << "Variables:" << std::endl;
+    for (auto && kv : vars)
+    {
+      std::cout << "  " << kv.first << " = " << kv.second << std::endl;
+    }
     parse_and_print ("1234");
     parse_and_print ("abc");
-    parse_and_print ("1*2+2");
+    parse_and_print ("(0 + 3) * x + 4*y - 1");
+
+    std::cout << "Input expression (blank to exit)" << std::endl;
+    std::string line;
+    while (std::getline (std::cin, line) && !line.empty ())
+    {
+      parse_and_print (line);
+    }
+
   }
 
 }
