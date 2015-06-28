@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -114,18 +115,28 @@ namespace cpp_pc
 
     CPP_PC__NO_COPY_MOVE (base_error);
 
-    base_error ()                               = default;
-    virtual ~base_error ()                      = default;
+    base_error ()           = default;
+    virtual ~base_error ()  = default;
   };
 
   struct expected_error : base_error
   {
-    expected_error (std::string const & expected)
+    expected_error (std::string expected)
       : expected (std::move (expected))
     {
     }
 
     std::string expected ;
+  };
+
+  struct unexpected_error : base_error
+  {
+    unexpected_error (std::string unexpected)
+      : unexpected (std::move (unexpected))
+    {
+    }
+
+    std::string unexpected ;
   };
 
   struct fork_error : base_error
@@ -494,6 +505,50 @@ namespace cpp_pc
       });
   }
 
+  namespace detail
+  {
+    auto const ptrampoline_error = std::make_shared<unexpected_error> ("empty trampoline");
+  }
+
+  template<typename TValue>
+  struct ptrampoline_payload
+  {
+    using ptr           = std::shared_ptr<ptrampoline_payload>;
+    using trampoline_f  = std::function<result<TValue> (state const & s, std::size_t position)>;
+
+    CPP_PC__PRELUDE ptrampoline_payload () = default;
+
+    CPP_PC__NO_COPY_MOVE (ptrampoline_payload); 
+
+    trampoline_f trampoline;
+  };
+
+  template<typename TValue>
+  CPP_PC__INLINE auto create_trampoline_payload ()
+  {
+    return std::make_shared<ptrampoline_payload<TValue>> ();
+  }
+
+  template<typename TValue>
+  CPP_PC__INLINE auto ptrampoline (typename ptrampoline_payload<TValue>::ptr payload)
+  {
+    CPP_PC__ASSERT ("empty payload" && payload);
+
+    return detail::adapt_parser_function (
+      [payload = std::move (payload)] (state const & s, std::size_t position)
+      {
+        CPP_PC__ASSERT ("empty trampoline" && payload->trampoline);
+        if (payload->trampoline)
+        {
+          return payload->trampoline (s, position);
+        }
+        else
+        {
+          return result<TValue> (position, detail::ptrampoline_error);
+        }
+      });
+  }
+
   template<typename TParser>
   CPP_PC__INLINE auto pbreakpoint (TParser && parser)
   {
@@ -579,14 +634,65 @@ namespace cpp_pc
     using value_type = detail::parser_value_type_t<TParser>;
 
     detail::pchoice_impl<value_type, TParser, TParsers...> impl (
-        std::forward<TParser> (parser)
-      , std::forward<TParsers...> (parsers...)
+      // TODO: Perfect forward
+        parser
+      , parsers...
       );
 
     return detail::adapt_parser_function (
       [impl = std::move (impl)] (state const & s, std::size_t position)
       {
         return impl.parse (s, position);
+      });
+  }
+
+  template<typename TBeginParser, typename TParser, typename TEndParser>
+  CPP_PC__INLINE auto pbetween (
+      TBeginParser  && begin_parser
+    , TParser       && parser
+    , TEndParser    && end_parser
+    )
+  {
+    return detail::adapt_parser_function (
+      [
+          begin_parser  = std::forward<TBeginParser> (begin_parser)
+        , parser        = std::forward<TParser> (parser)
+        , end_parser    = std::forward<TEndParser> (end_parser)
+      ] (state const & s, std::size_t position)
+      {
+        using value_type = detail::parser_value_type_t<TParser>;
+
+        auto bv = begin_parser (s, position);
+        if (!bv.value)
+        {
+          return bv
+            .fail_as<value_type> ()
+            ;
+        }
+
+        auto v = parser (s, bv.position);
+        if (!v.value)
+        {
+          return v
+            .merge_with (bv)
+            ;
+        }
+
+        auto ev = end_parser (s, v.position);
+        if (!ev.value)
+        {
+          return ev
+            .fail_as<value_type> ()
+            .merge_with (v)
+            .merge_with (bv)
+            ;
+        }
+
+        return v
+          .merge_with (bv)
+          .merge_with (ev)
+          .reposition (ev.position)
+          ;
       });
   }
 

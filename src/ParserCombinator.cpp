@@ -506,6 +506,9 @@ namespace calculator
         ;
     };
 
+  auto pfull_trampoline = create_trampoline_payload<expr::ptr> ();
+  auto pfull_expr       = ptrampoline<expr::ptr> (pfull_trampoline);
+
   auto pint_expr        = 
         pint ()   
     >=  [] (int v) { return preturn (int_expr::create (v)); }
@@ -521,10 +524,24 @@ namespace calculator
     >   pskip_ws ()
     ;
 
-  auto plparen = pskip_char ('(') > pskip_ws ();
-  auto prparen = pskip_char (')') > pskip_ws ();
+  auto plparen          = pskip_char ('(') > pskip_ws ();
+
+  auto prparen          = pskip_char (')') > pskip_ws ();
+
+  auto psub_expr        = pbetween (plparen, pfull_expr, prparen);
+
 
   auto pvalue_expr = pchoice (pint_expr, pidentifier_expr) > pskip_ws ();
+
+  struct init_parser
+  {
+    init_parser ()
+    {
+      pfull_trampoline->trampoline = pvalue_expr.parser_function;
+    }
+  };
+
+  init_parser init;
 
   void parse_and_print (const std::string & input)
   {
@@ -556,6 +573,7 @@ namespace calculator
   {
     parse_and_print ("1234");
     parse_and_print ("abc");
+    parse_and_print ("(abc)");
 
   }
 
