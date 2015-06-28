@@ -576,7 +576,7 @@ namespace cpp_pc
   }
 
   template<typename T>
-  CPP_PC__PRELUDE auto success (std::size_t position, T && v)
+  CPP_PC__PRELUDE auto success (std::size_t position, T && v, base_error::ptr error)
   {
     return result<detail::strip_type_t<T>> (position, std::forward<T> (v));
   }
@@ -625,7 +625,7 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [v = std::forward<TValue> (v)] (state const & s, std::size_t position)
       {
-        return success (position, v);
+        return success (position, v, nullptr);
       });
   }
 
@@ -1026,7 +1026,7 @@ namespace cpp_pc
           return failure<sub_string> (position, error);
         }
 
-        return success (position + consumed, std::move (result));
+        return success (position + consumed, std::move (result), error);
       });
   }
 
@@ -1044,9 +1044,7 @@ namespace cpp_pc
         {
           auto ss = pv.value.get ();
           CPP_PC__ASSERT (ss.size () == 1U);
-          return success (pv.position, *ss.begin)
-            .merge_with (pv)
-            ;
+          return success (pv.position, *ss.begin, std::move (pv.error));
         }
         else
         {
@@ -1069,7 +1067,7 @@ namespace cpp_pc
       [at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
       {
         auto ss = s.satisfy (position, at_least, at_most, satisfy_function);
-        return success (position + ss.size (), unit);
+        return success (position + ss.size (), unit, nullptr);  // TODO: Add error
       });
   }
 
@@ -1083,7 +1081,7 @@ namespace cpp_pc
         auto peek = s.peek (position);
         if (peek == ch)
         {
-          return success (position + 1, unit);
+          return success (position + 1, unit, error);
         }
         else
         {
@@ -1110,7 +1108,7 @@ namespace cpp_pc
         auto peek = s.peek (position);
         if (peek == EOS)
         {
-          return success (position, unit);
+          return success (position, unit, detail::peos_error);
         }
         else
         {
@@ -1138,7 +1136,7 @@ namespace cpp_pc
           {
             i = 10*i + (*iter - '0');
           }
-          return success (position + consumed, i);
+          return success (position + consumed, i, detail::pint_error);
         }
         else
         {
