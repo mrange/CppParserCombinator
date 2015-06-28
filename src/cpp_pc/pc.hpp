@@ -808,7 +808,11 @@ namespace cpp_pc
         else
         {
           return pv
+#ifdef _MSC_VER
             .fail_as<char> ()
+#else
+            .template fail_as<char> ()
+#endif
             ;
         }
 
