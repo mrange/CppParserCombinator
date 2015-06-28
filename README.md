@@ -41,7 +41,7 @@ auto pidentifier_expr =
   ;
 auto pvalue_expr      = pchoice (pint_expr, pidentifier_expr, psub_expr) > pskip_ws ();
 auto p0_op =
-      psatisfy_char ("*/%")
+      pchar ("*/%")
   >   pskip_ws ()
   ;
 auto pop0_expr        = psep (pvalue_expr , p0_op , binary_expr::create);
