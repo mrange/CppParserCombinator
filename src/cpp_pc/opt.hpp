@@ -74,12 +74,12 @@ namespace cpp_pc
     }
 
     CPP_PC__INLINE opt (opt && o) noexcept
-      : has_value (std::move (o.has_value))
+      : has_value (o.has_value)
     {
-      o.has_value = false;
       if (has_value)
       {
         new (&storage) value_type (std::move (o.get ()));
+        o.has_value = false;
       }
     }
 
@@ -106,12 +106,12 @@ namespace cpp_pc
 
       clear ();
 
-      has_value = std::move (o.has_value);
-      o.has_value = false;
+      has_value = o.has_value;
 
       if (has_value)
       {
         new (&storage) value_type (std::move (o.get ()));
+        o.has_value = false;
       }
 
       return *this;
@@ -143,11 +143,13 @@ namespace cpp_pc
 
     CPP_PC__PRELUDE value_type const & get () const noexcept
     {
+      CPP_PC__ASSERT (has_value);
       return *get_ptr ();
     }
 
     CPP_PC__INLINE value_type const & get () noexcept
     {
+      CPP_PC__ASSERT (has_value);
       return *get_ptr ();
     }
 
@@ -155,8 +157,8 @@ namespace cpp_pc
     {
       if (has_value)
       {
-        has_value = false;
         get ().~value_type ();
+        has_value = false;
       }
     }
 

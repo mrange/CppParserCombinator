@@ -272,19 +272,15 @@ namespace cpp_pc
     result ()                             = delete ;
 
     CPP_PC__INLINE explicit result (std::size_t position, base_error::ptr error)
-      : position  (std::move (position))
+      : begin     (position)
+      , end       (position)
       , error     (std::move (error))
     {
     }
 
-    CPP_PC__PRELUDE explicit result (std::size_t position, T o)
-      : position  (std::move (position))
-      , value     (std::move (o))
-    {
-    }
-
-    CPP_PC__INLINE explicit result (std::size_t position, T o, base_error::ptr error)
-      : position  (std::move (position))
+    CPP_PC__INLINE explicit result (std::size_t begin, std::size_t end, T o, base_error::ptr error)
+      : begin     (begin)
+      , end       (end)
       , value     (std::move (o))
       , error     (std::move (error))
     {
@@ -293,33 +289,34 @@ namespace cpp_pc
     CPP_PC__PRELUDE bool operator == (result const & o) const
     {
       return
-            position  == o.position
-        &&  value     == o.value
+            begin == o.begin
+        &&  end   == o.end
+        &&  value == o.value
         ;
     }
 
-    CPP_PC__INLINE result<value_type> & reposition (std::size_t p)
+    CPP_PC__INLINE result<value_type> & reposition (std::size_t b, std::size_t e)
     {
-      // TODO: How should merging work on different positions
-      if (position != p)
+      if (begin != b)
       {
-        position = p;
         error.reset ();
       }
+      begin = b;
+      end = e;
       return *this;
     }
 
     template<typename TOther>
     CPP_PC__PRELUDE result<TOther> fail_as () const
     {
-      return result<TOther> (position, error);
+      return result<TOther> (end, error);
     }
 
     template<typename TOther>
     CPP_PC__INLINE result<value_type> & merge_with (result<TOther> const & o)
     {
       // TODO: How should merging work on different positions
-      if (position != o.position)
+      if (begin != o.begin)
       {
       }
       else if (error && o.error)
@@ -357,7 +354,7 @@ namespace cpp_pc
 
       std::stringstream o;
       o
-          << "Error detected at position " << position + 1;
+          << "Error detected at position " << begin + 1;
           ;
 
       detail::collect_error_visitor visitor;
@@ -432,7 +429,9 @@ namespace cpp_pc
       return o.str ();
     }
 
-    std::size_t     position  ;
+    std::size_t     begin     ;
+    std::size_t     end       ;
+
     opt<T>          value     ;
     base_error::ptr error     ;
   };
@@ -564,27 +563,15 @@ namespace cpp_pc
   }
 
   template<typename T>
-  CPP_PC__INLINE auto make_result (std::size_t position, opt<T> o, base_error::ptr error)
+  CPP_PC__PRELUDE auto success (std::size_t begin, std::size_t end, T && v, base_error::ptr error)
   {
-#if _MSC_VER
-    auto r = result<T> (std::move (position), std::move (error));
-    r.value = std::move (o);
-    return r;
-#else
-    return result<T> (std::move (position), std::move (o), std::move (error));
-#endif
-  }
-
-  template<typename T>
-  CPP_PC__PRELUDE auto success (std::size_t position, T && v, base_error::ptr error)
-  {
-    return result<detail::strip_type_t<T>> (position, std::forward<T> (v));
+    return result<detail::strip_type_t<T>> (begin, end, std::forward<T> (v), std::move (error));
   }
 
   template<typename T>
   CPP_PC__INLINE auto failure (std::size_t position, base_error::ptr error)
   {
-    return result<T> (std::move (position), std::move (error));
+    return result<T> (position, std::move (error));
   }
 
   template<typename TValueType, typename TParserFunction>
@@ -625,7 +612,7 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [v = std::forward<TValue> (v)] (state const & s, std::size_t position)
       {
-        return success (position, v, nullptr);
+        return success (position, position, v, nullptr);
       });
   }
 
@@ -644,7 +631,10 @@ namespace cpp_pc
 
         if (tv.value)
         {
-          return fu (std::move (tv.value.get ())) (s, tv.position)
+          auto tu = fu (std::move (tv.value.get ())) (s, tv.end);
+
+          return tu
+            .reposition (position, tu.end)
             .merge_with (tv)
             ;
         }
@@ -676,11 +666,11 @@ namespace cpp_pc
         auto tv = t (s, position);
         if (tv.value)
         {
-          auto tu = u (s, tv.position);
+          auto tu = u (s, tv.end);
           if (tu.value)
           {
             return tv
-              .reposition (tu.position)
+              .reposition (position, tu.end)
               .merge_with (tu)
               ;
           }
@@ -692,6 +682,7 @@ namespace cpp_pc
 #else
               .template fail_as<value_type> ()
 #endif
+              .reposition (position, tu.end)
               .merge_with (tv)
               ;
           }
@@ -718,7 +709,9 @@ namespace cpp_pc
         auto tv = t (s, position);
         if (tv.value)
         {
-          return u (s, tv.position)
+          auto tu = u (s, tv.end);
+          return tu
+            .reposition (position, tu.end)
             .merge_with (tv)
             ;
         }
@@ -889,7 +882,7 @@ namespace cpp_pc
           group_error::group_type g;
           auto tv = impl.parse (&g, s, position);
           return tv
-            .set_error (std::move (std::make_shared<group_error> (std::move (g))))
+            .set_error (std::make_shared<group_error> (std::move (g)))
             ;
         }
         else
@@ -927,7 +920,7 @@ namespace cpp_pc
             ;
         }
 
-        auto v = parser (s, bv.position);
+        auto v = parser (s, bv.end);
         if (!v.value)
         {
           return v
@@ -935,7 +928,7 @@ namespace cpp_pc
             ;
         }
 
-        auto ev = end_parser (s, v.position);
+        auto ev = end_parser (s, v.end);
         if (!ev.value)
         {
           return ev
@@ -950,7 +943,7 @@ namespace cpp_pc
         }
 
         return v
-          .reposition (ev.position)
+          .reposition (position, ev.end)
           .merge_with (bv)
           .merge_with (ev)
           ;
@@ -984,7 +977,7 @@ namespace cpp_pc
 
         while (cont)
         {
-          auto sv = sep_parser (s, v.position);
+          auto sv = sep_parser (s, v.end);
           v.merge_with (sv);
           if (!sv.value)
           {
@@ -992,14 +985,14 @@ namespace cpp_pc
             continue;
           }
 
-          auto ov = parser (s, sv.position);
+          auto ov = parser (s, sv.end);
           if (!ov.value)
           {
             return ov
               .merge_with (v)
               ;
           }
-          v.reposition (ov.position);
+          v.reposition (position, ov.end);
           v.merge_with (ov);
 
           CPP_PC__ASSERT (v.value);
@@ -1026,7 +1019,7 @@ namespace cpp_pc
           return failure<sub_string> (position, error);
         }
 
-        return success (position + consumed, std::move (result), error);
+        return success (position, position + consumed, std::move (result), error);
       });
   }
 
@@ -1044,7 +1037,7 @@ namespace cpp_pc
         {
           auto ss = pv.value.get ();
           CPP_PC__ASSERT (ss.size () == 1U);
-          return success (pv.position, *ss.begin, std::move (pv.error));
+          return success (position, pv.end, *ss.begin, std::move (pv.error));
         }
         else
         {
@@ -1067,7 +1060,7 @@ namespace cpp_pc
       [at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
       {
         auto ss = s.satisfy (position, at_least, at_most, satisfy_function);
-        return success (position + ss.size (), unit, nullptr);  // TODO: Add error
+        return success (position, position + ss.size (), unit, nullptr);  // TODO: Add error
       });
   }
 
@@ -1081,7 +1074,7 @@ namespace cpp_pc
         auto peek = s.peek (position);
         if (peek == ch)
         {
-          return success (position + 1, unit, error);
+          return success (position, position + 1, unit, error);
         }
         else
         {
@@ -1108,7 +1101,7 @@ namespace cpp_pc
         auto peek = s.peek (position);
         if (peek == EOS)
         {
-          return success (position, unit, detail::peos_error);
+          return success (position, position, unit, detail::peos_error);
         }
         else
         {
@@ -1136,7 +1129,7 @@ namespace cpp_pc
           {
             i = 10*i + (*iter - '0');
           }
-          return success (position + consumed, i, detail::pint_error);
+          return success (position, position + consumed, i, detail::pint_error);
         }
         else
         {
