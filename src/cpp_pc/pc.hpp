@@ -506,7 +506,13 @@ namespace cpp_pc
         }
         else
         {
-          return tv.template fail_as<value_type> ();
+          return tv
+#ifdef _MSC_VER
+            .fail_as<value_type> ()
+#else
+            .template fail_as<value_type> ()
+#endif
+            ;
         }
       });
   }
@@ -672,7 +678,11 @@ namespace cpp_pc
         if (!bv.value)
         {
           return bv
+#ifdef _MSC_VER
+            .fail_as<value_type> ()
+#else
             .template fail_as<value_type> ()
+#endif
             ;
         }
 
@@ -688,7 +698,11 @@ namespace cpp_pc
         if (!ev.value)
         {
           return ev
+#ifdef _MSC_VER
+            .fail_as<value_type> ()
+#else
             .template fail_as<value_type> ()
+#endif
             .merge_with (v)
             .merge_with (bv)
             ;
