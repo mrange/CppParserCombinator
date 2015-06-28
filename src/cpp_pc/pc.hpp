@@ -9,7 +9,7 @@
 #include "common.hpp"
 #include "opt.hpp"
 
-#define CPP_PC__CHECK_PARSER(parser) static_assert (detail::is_parser<decltype (parser)>::value, "Must be a valid parser")
+#define CPP_PC__CHECK_PARSER(p) static_assert (::cpp_pc::detail::is_parser<decltype (p)>::value, "Must be a valid parser")
 
 namespace cpp_pc
 {
@@ -239,6 +239,12 @@ namespace cpp_pc
 
   template<typename TParser, typename TOtherParser>
   CPP_PC__PRELUDE auto pright (TParser && t, TOtherParser && u);
+
+  namespace detail
+  {
+    template<typename T>
+    struct is_parser;
+  }
 
   template<typename TValue, typename TParserFunction>
   struct parser
@@ -500,7 +506,7 @@ namespace cpp_pc
         }
         else
         {
-          return tv.fail_as<value_type> ();
+          return tv.template fail_as<value_type> ();
         }
       });
   }
@@ -518,7 +524,7 @@ namespace cpp_pc
 
     CPP_PC__PRELUDE ptrampoline_payload () = default;
 
-    CPP_PC__NO_COPY_MOVE (ptrampoline_payload); 
+    CPP_PC__NO_COPY_MOVE (ptrampoline_payload);
 
     trampoline_f trampoline;
   };
@@ -666,7 +672,7 @@ namespace cpp_pc
         if (!bv.value)
         {
           return bv
-            .fail_as<value_type> ()
+            .template fail_as<value_type> ()
             ;
         }
 
@@ -682,7 +688,7 @@ namespace cpp_pc
         if (!ev.value)
         {
           return ev
-            .fail_as<value_type> ()
+            .template fail_as<value_type> ()
             .merge_with (v)
             .merge_with (bv)
             ;

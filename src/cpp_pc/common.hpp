@@ -30,11 +30,15 @@ namespace cpp_pc
 
   struct unit_type
   {
+    CPP_PC__PRELUDE unit_type ()
+    {
+    }
+
     CPP_PC__PRELUDE bool operator == (unit_type) const
     {
       return true;
     }
   };
 
-  constexpr unit_type const unit;
+  CPP_PC__PRELUDE unit_type const unit;
 }

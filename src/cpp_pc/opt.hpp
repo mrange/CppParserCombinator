@@ -8,9 +8,12 @@ namespace cpp_pc
 {
   struct empty_opt_type
   {
+    CPP_PC__PRELUDE empty_opt_type ()
+    {
+    }
   };
 
-  constexpr empty_opt_type const empty_opt;
+  CPP_PC__PRELUDE empty_opt_type const empty_opt;
 
   template<typename TValue>
   struct opt

@@ -390,7 +390,7 @@ namespace test_parser
 namespace calculator
 {
   using namespace cpp_pc;
-  
+
   struct expr
   {
     using ptr = std::shared_ptr<expr>;
@@ -436,7 +436,7 @@ namespace calculator
 
     void build_string (std::ostream & o) override
     {
-      o 
+      o
         << '\''
         << id
         << '\''
@@ -463,13 +463,13 @@ namespace calculator
 
     void build_string (std::ostream & o) override
     {
-      o 
+      o
         << '('
         ;
 
       left->build_string (o);
 
-      o 
+      o
         << ' '
         << op
         << ' '
@@ -489,16 +489,16 @@ namespace calculator
 
   auto satisfy_identifier = [] (std::size_t pos, char ch)
     {
-      return 
-            ch >= 'A' && ch <= 'Z'
-        ||  ch >= 'a' && ch <= 'z'
-        ||  (pos > 0) && ch >= '0' && ch <= '9'
+      return
+            (ch >= 'A' && ch <= 'Z'               )
+        ||  (ch >= 'a' && ch <= 'z'               )
+        ||  ((pos > 0) && ch >= '0' && ch <= '9'  )
         ;
     };
 
   auto satisfy_operator = [] (std::size_t, char ch)
     {
-      return 
+      return
             ch == '+'
         ||  ch == '+'
         ||  ch == '*'
@@ -509,17 +509,17 @@ namespace calculator
   auto pfull_trampoline = create_trampoline_payload<expr::ptr> ();
   auto pfull_expr       = ptrampoline<expr::ptr> (pfull_trampoline);
 
-  auto pint_expr        = 
-        pint ()   
+  auto pint_expr        =
+        pint ()
     >=  [] (int v) { return preturn (int_expr::create (v)); }
     ;
 
-  auto pidentifier_expr = 
+  auto pidentifier_expr =
         psatisfy ("identifier", 1, SIZE_MAX, satisfy_identifier)
     >=  [] (sub_string ss) { return preturn (identifier_expr::create (ss.str ())); }
     ;
 
-  auto poperator = 
+  auto poperator =
         psatisfy ("operator", 1, 1, satisfy_operator)
     >   pskip_ws ()
     ;
@@ -548,22 +548,22 @@ namespace calculator
     auto r = parse (pvalue_expr, input);
     if (r.value)
     {
-      std::cout 
+      std::cout
         << "Parsed: " << input
         << " as: "
         ;
-      
+
       r.value.get ()->build_string (std::cout);
 
-      std::cout 
+      std::cout
         << std::endl
         ;
     }
     else
     {
-      std::cout 
-        << "Failed to parse: " 
-        << input 
+      std::cout
+        << "Failed to parse: "
+        << input
         << std::endl
         ;
     }
