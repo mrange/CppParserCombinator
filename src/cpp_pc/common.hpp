@@ -20,7 +20,7 @@
 // ----------------------------------------------------------------------------
 #define CPP_PC__PRELUDE constexpr
 #define CPP_PC__INLINE  inline
-#define CPP_PC__ASSERT(expr) assert(expr)
+#define CPP_PC__ASSERT(expr) assert (expr)
 
 #define CPP_PC__NO_COPY_MOVE(cls)           \
   cls (cls const &)               = delete ;\
