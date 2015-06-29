@@ -388,7 +388,6 @@ namespace cpp_pc
       return pbind (*this, std::forward<TBindFunction> (bind_function));
     };
 
-
     template<typename TParser>
     CPP_PC__PRELUDE auto operator > (TParser && parser) const
     {
@@ -662,6 +661,36 @@ namespace cpp_pc
           return tu
             .reposition (tu.end)
             ;
+        }
+        else
+        {
+          return tv
+#ifdef _MSC_VER
+            .fail_as<value_type> ()
+#else
+            .template fail_as<value_type> ()
+#endif
+            ;
+        }
+      });
+  }
+
+  template<typename TParser, typename TMapper>
+  CPP_PC__PRELUDE auto pmap (TParser && t, TMapper && m)
+  {
+    CPP_PC__CHECK_PARSER (t);
+
+    return detail::adapt_parser_function (
+      [t = std::forward<TParser> (t), m = std::forward<TMapper> (m)] (state const & s, std::size_t position)
+      {
+
+        auto tv = t (s, position);
+
+        using value_type  = decltype (m (std::move (tv.value.get()))) ;
+
+        if (tv.value)
+        {
+          return success (tv.end, m (std::move (tv.value.get())));
         }
         else
         {

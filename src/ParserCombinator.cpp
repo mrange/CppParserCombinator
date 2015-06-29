@@ -491,9 +491,9 @@ namespace calculator
       }
     }
 
-    static expr::ptr create (std::string id)
+    static expr::ptr create (sub_string const & s)
     {
-      return std::make_shared<identifier_expr> (std::move (id));
+      return std::make_shared<identifier_expr> (s.str ());
     }
 
   };
@@ -569,25 +569,22 @@ namespace calculator
         ||  ((pos > 0) && ch >= '0' && ch <= '9'  )
         ;
     };
+  auto pidentifier_expr = pmap (psatisfy ("identifier", 1, SIZE_MAX, satisfy_identifier), identifier_expr::create);
+
+  auto pint_expr        = pmap (pint, int_expr::create);
 
   auto pexpr_trampoline = create_trampoline<expr::ptr> ();
   auto pexpr            = ptrampoline<expr::ptr> (pexpr_trampoline);
-
   auto psub_expr        = pbetween (pskip_char ('(') > pskip_ws, pexpr, pskip_char (')'));
-  auto pint_expr        =
-        pint
-    >=  [] (int v) { return preturn (int_expr::create (v)); }
-    ;
-  auto pidentifier_expr =
-        psatisfy ("identifier", 1, SIZE_MAX, satisfy_identifier)
-    >=  [] (sub_string ss) { return preturn (identifier_expr::create (ss.str ())); }
-    ;
+
   auto pvalue_expr      = pchoice (pint_expr, pidentifier_expr, psub_expr) > pskip_ws;
+
   auto p0_op =
         pany_of ("*/%")
     >   pskip_ws
     ;
   auto pop0_expr        = psep (pvalue_expr , p0_op , binary_expr::create);
+
   auto p1_op =
         pany_of ("+-")
     >   pskip_ws
@@ -648,6 +645,16 @@ namespace calculator
 
   }
 
+}
+// ----------------------------------------------------------------------------
+
+// ----------------------------------------------------------------------------
+namespace json
+{
+  /*
+  auto ptrue  = pskip_string ("true");
+  auto pfalse = pskip_string ("true");
+  */
 }
 // ----------------------------------------------------------------------------
 
