@@ -378,6 +378,62 @@ namespace test_parser
 
     {
       auto p =
+            pskip_string ("123")
+        ;
+      result<unit_type> expected  = success (3, unit);
+      result<unit_type> actual    = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            pskip_string ("124")
+        ;
+      result<unit_type> expected  = failure<unit_type> (0);
+      result<unit_type> actual    = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            pskip_string ("123")
+        <   preturn (true)
+        ;
+      result<bool> expected  = success (3, true);
+      result<bool> actual    = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            pskip_string ("124")
+        <   preturn (true)
+        ;
+      result<bool> expected  = failure<bool> (0);
+      result<bool> actual    = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            pskip_char ('1')
+        ;
+      result<unit_type> expected  = success (1, unit);
+      result<unit_type> actual    = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            pskip_char ('2')
+        ;
+      result<unit_type> expected  = failure<unit_type> (0);
+      result<unit_type> actual    = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
             pint
         >   pskip_ws
         >   pskip_char ('+')
@@ -411,6 +467,7 @@ namespace test_parser
     // pbetween
     // psep
     // peos
+    // pskip_satisfy
   }
 }
 // ----------------------------------------------------------------------------
@@ -439,6 +496,8 @@ namespace calculator
 
   struct int_expr : expr
   {
+    int value;
+
     int_expr (int v)
       : value (std::move (v))
     {
@@ -454,17 +513,16 @@ namespace calculator
       return value;
     }
 
-    int value;
-
     static expr::ptr create (int v)
     {
       return std::make_shared<int_expr> (v);
     }
-
   };
 
   struct identifier_expr : expr
   {
+    std::string id;
+
     identifier_expr (std::string id)
       : id (std::move (id))
     {
@@ -474,8 +532,6 @@ namespace calculator
     {
       o << id;
     }
-
-    std::string id;
 
     int eval (variables const & vs) const override
     {
@@ -495,11 +551,14 @@ namespace calculator
     {
       return std::make_shared<identifier_expr> (s.str ());
     }
-
   };
 
   struct binary_expr : expr
   {
+    expr::ptr left  ;
+    char      op    ;
+    expr::ptr right ;
+
     binary_expr (expr::ptr left, char op, expr::ptr right)
       : left  (std::move (left))
       , op    (std::move (op))
@@ -550,15 +609,10 @@ namespace calculator
       }
     }
 
-    expr::ptr left  ;
-    char      op    ;
-    expr::ptr right ;
-
     static expr::ptr create (expr::ptr left, char op, expr::ptr right)
     {
       return std::make_shared<binary_expr> (std::move (left), std::move (op), std::move (right));
     }
-
   };
 
   auto satisfy_identifier = [] (std::size_t pos, char ch)
@@ -651,10 +705,36 @@ namespace calculator
 // ----------------------------------------------------------------------------
 namespace json
 {
-  /*
-  auto ptrue  = pskip_string ("true");
-  auto pfalse = pskip_string ("true");
-  */
+  using namespace cpp_pc;
+
+  struct json_ast
+  {
+    using ptr = std::shared_ptr<json_ast> ;
+    json_ast ()                             = default;
+    json_ast (json_ast const &)             = delete ;
+    json_ast (json_ast &&)                  = delete ;
+    json_ast & operator = (json_ast const &)= delete ;
+    json_ast & operator = (json_ast &&)     = delete ;
+    virtual ~json_ast ()                    = default;
+  };
+
+  struct json_boolean : json_ast
+  {
+    bool value;
+  };
+
+  struct null_type
+  {
+    constexpr null_type ()
+    {
+    }
+  };
+
+  constexpr null_type null_value;
+
+  auto ptrue    = pskip_string ("true")   < preturn (true);
+  auto pfalse   = pskip_string ("false")  < preturn (false);
+  auto pnull    = pskip_string ("null")   < preturn (null_value);
 }
 // ----------------------------------------------------------------------------
 

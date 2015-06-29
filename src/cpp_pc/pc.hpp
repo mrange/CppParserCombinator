@@ -118,6 +118,17 @@ namespace cpp_pc
 
   namespace detail
   {
+    auto make_expected (std::string e)
+    {
+      return std::make_shared<expected_error> (std::move (e));
+    }
+
+    auto make_unexpected (std::string ue)
+    {
+      return std::make_shared<unexpected_error> (std::move (ue));
+    }
+
+
     struct collect_error_visitor : error_visitor
     {
       std::vector<std::string>  expected  ;
@@ -960,10 +971,8 @@ namespace cpp_pc
   template<typename TSatisfyFunction>
   CPP_PC__INLINE auto psatisfy (std::string expected, std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
   {
-    auto error = std::make_shared<expected_error> (std::move (expected));
-
     return detail::adapt_parser_function (
-      [error = std::move (error), at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
+      [error = detail::make_expected (std::move (expected)), at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
       {
         s.append_error (position, error);
 
@@ -972,7 +981,7 @@ namespace cpp_pc
         auto consumed = result.size ();
         if (consumed < at_least)
         {
-          return failure<sub_string> (position + consumed);
+          return failure<sub_string> (position);
         }
 
         return success (position + consumed, std::move (result));
@@ -989,7 +998,7 @@ namespace cpp_pc
 
     base_error::ptr char_to_expected (char ch)
     {
-      return std::make_shared<expected_error> (detail::char_to_string (ch));
+      return detail::make_expected (detail::char_to_string (ch));
     }
   }
 
@@ -1056,11 +1065,23 @@ namespace cpp_pc
       });
   }
 
+  CPP_PC__INLINE auto pskip_string (std::string str)
+  {
+    auto sz = str.size ();
+    auto expected =  '"' + str + '"';
+    auto satisfy = [str = std::move (str)] (std::size_t pos, char ch)
+      {
+        CPP_PC__ASSERT (pos < str.size ());
+        return ch == str[pos];
+      };
+    return pskip_satisfy (std::move (expected), sz, sz, std::move (satisfy));
+  }
+
   auto const pskip_ws = pskip_satisfy ("whitespace", 0U, SIZE_MAX, satisfy_whitespace);
 
   namespace detail
   {
-    auto const peos_error = std::make_shared<expected_error> ("EOS");
+    auto const peos_error = detail::make_expected ("EOS");
   }
 
   auto const peos =
@@ -1082,7 +1103,7 @@ namespace cpp_pc
 
   namespace detail
   {
-    auto const pint_error = std::make_shared<expected_error> ("integer");
+    auto const pint_error = detail::make_expected ("integer");
   }
 
   auto const pint =
@@ -1095,7 +1116,7 @@ namespace cpp_pc
         auto consumed = ss.size ();
         if (consumed == 0)
         {
-          return failure<int> (position + consumed);
+          return failure<int> (position);
         }
 
         auto i = 0;
