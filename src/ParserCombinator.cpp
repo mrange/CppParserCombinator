@@ -151,7 +151,7 @@ namespace test_parser
   }
 
   template<typename T>
-  void test_opt (T const & one, T const & two)
+  void test_opt (T const & one, T const & /*two*/)
   {
     {
       opt<T> empty;
@@ -360,7 +360,7 @@ namespace test_parser
 
     {
       auto p =
-            pint ()
+            pint
         ;
       result<int> expected  = success (4, 1234);
       result<int> actual    = plain_parse (p, input);
@@ -369,7 +369,7 @@ namespace test_parser
 
     {
       auto p =
-            pskip_ws ()
+            pskip_ws
         ;
       result<unit_type> expected  = success (0, unit);
       result<unit_type> actual    = plain_parse (p, input);
@@ -378,11 +378,11 @@ namespace test_parser
 
     {
       auto p =
-            pint ()
-        >   pskip_ws ()
+            pint
+        >   pskip_ws
         >   pskip_char ('+')
-        >   pskip_ws ()
-        >=  [] (int v) { return pint () >= [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
+        >   pskip_ws
+        >=  [] (int v) { return pint >= [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
         ;
       result<std::tuple<int,int>> expected  = success (11, std::make_tuple (1234, 5678));
       result<std::tuple<int,int>> actual    = plain_parse (p, input);
@@ -391,11 +391,11 @@ namespace test_parser
 
     {
       auto p =
-            pint ()
-        >   pskip_ws ()
+            pint
+        >   pskip_ws
         >   pskip_char ('-')
-        >   pskip_ws ()
-        >=  [] (int v) { return pint () >= [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
+        >   pskip_ws
+        >=  [] (int v) { return pint >= [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
         ;
       result<std::tuple<int,int>> expected  = failure<std::tuple<int,int>> (5);
       result<std::tuple<int,int>> actual    = plain_parse (p, input);
@@ -403,8 +403,9 @@ namespace test_parser
     }
 
     // TODO:
+    // pany_of
+    // punit
     // pchoice
-    // psatisfy_char
     // ptrampoline
     // pbreakpoint
     // pbetween
@@ -448,7 +449,7 @@ namespace calculator
       o << value;
     }
 
-    int eval (variables const & vs) const override
+    int eval (variables const &) const override
     {
       return value;
     }
@@ -569,51 +570,34 @@ namespace calculator
         ;
     };
 
-  auto satisfy_mullike_op = [] (std::size_t, char ch)
-    {
-      return
-            ch == '*'
-        ||  ch == '/'
-        ||  ch == '%'
-        ;
-    };
-
-  auto satisfy_addlike_op = [] (std::size_t, char ch)
-    {
-      return
-            ch == '+'
-        ||  ch == '-'
-        ;
-    };
-
   auto pexpr_trampoline = create_trampoline<expr::ptr> ();
   auto pexpr            = ptrampoline<expr::ptr> (pexpr_trampoline);
 
-  auto psub_expr        = pbetween (pskip_char ('(') > pskip_ws (), pexpr, pskip_char (')'));
+  auto psub_expr        = pbetween (pskip_char ('(') > pskip_ws, pexpr, pskip_char (')'));
   auto pint_expr        =
-        pint ()
+        pint
     >=  [] (int v) { return preturn (int_expr::create (v)); }
     ;
   auto pidentifier_expr =
         psatisfy ("identifier", 1, SIZE_MAX, satisfy_identifier)
     >=  [] (sub_string ss) { return preturn (identifier_expr::create (ss.str ())); }
     ;
-  auto pvalue_expr      = pchoice (pint_expr, pidentifier_expr, psub_expr) > pskip_ws ();
+  auto pvalue_expr      = pchoice (pint_expr, pidentifier_expr, psub_expr) > pskip_ws;
   auto p0_op =
-        psatisfy_char ("'*', '/', '%'", satisfy_mullike_op)
-    >   pskip_ws ()
+        pany_of ("*/%")
+    >   pskip_ws
     ;
   auto pop0_expr        = psep (pvalue_expr , p0_op , binary_expr::create);
   auto p1_op =
-        psatisfy_char ("'+', '-'", satisfy_addlike_op)
-    >   pskip_ws ()
+        pany_of ("+-")
+    >   pskip_ws
     ;
   auto pop1_expr        = psep (pop0_expr   , p1_op , binary_expr::create);
 
   auto pcalculator_expr = [] ()
   {
     pexpr_trampoline->trampoline = pop1_expr.parser_function;
-    return pskip_ws () < pexpr > peos ();
+    return pskip_ws < pexpr > peos;
   } ();
 
   variables const vars

@@ -32,7 +32,7 @@
 // ----------------------------------------------------------------------------
 namespace cpp_pc
 {
-  CPP_PC__PRELUDE int EOS = 0xFF000001;
+  CPP_PC__PRELUDE int EOS = 0x70000001;
 
   struct sub_string
   {
@@ -60,7 +60,6 @@ namespace cpp_pc
 
   struct expected_error   ;
   struct unexpected_error ;
-  struct group_error      ;
 
   struct error_visitor
   {
@@ -71,7 +70,6 @@ namespace cpp_pc
 
     virtual void visit (expected_error &  ) = 0;
     virtual void visit (unexpected_error &) = 0;
-    virtual void visit (group_error &     ) = 0;
   };
 
   struct base_error
@@ -85,6 +83,8 @@ namespace cpp_pc
 
     virtual void apply (error_visitor &) = 0;
   };
+
+  using base_errors = std::vector<base_error::ptr>;
 
   struct expected_error : base_error
   {
@@ -116,23 +116,6 @@ namespace cpp_pc
     std::string unexpected ;
   };
 
-  struct group_error : base_error
-  {
-    using group_type = std::vector<base_error::ptr>;
-
-    group_error (group_type g)
-      : group (std::move (g))
-    {
-    }
-
-    void apply (error_visitor & v) override
-    {
-      v.visit (*this);
-    }
-
-    group_type group;
-  };
-
   namespace detail
   {
     struct collect_error_visitor : error_visitor
@@ -149,17 +132,6 @@ namespace cpp_pc
       {
         unexpected.push_back (e.unexpected);
       }
-
-      void visit (group_error & e) override
-      {
-        for (auto && g : e.group)
-        {
-          if (g)
-          {
-            g->apply (*this);
-          }
-        }
-      }
     };
   }
 
@@ -174,13 +146,13 @@ namespace cpp_pc
       , begin         (begin)
       , end           (end)
     {
-      CPP_PC__ASSERT(begin <= end);
+      CPP_PC__ASSERT (begin <= end);
     }
 
     CPP_PC__INLINE int peek (std::size_t position) const noexcept
     {
       auto current = begin + position;
-      CPP_PC__ASSERT(current <= end);
+      CPP_PC__ASSERT (current <= end);
       return
           current < end
         ? *current
@@ -191,27 +163,21 @@ namespace cpp_pc
     CPP_PC__INLINE std::size_t remaining (std::size_t position) const noexcept
     {
       auto current = begin + position;
-      CPP_PC__ASSERT(current <= end);
+      CPP_PC__ASSERT (current <= end);
       return end - current;
     }
 
     template<typename TSatisfyFunction>
     CPP_PC__INLINE sub_string satisfy (
         std::size_t position
-      , std::size_t at_least
       , std::size_t at_most
       , TSatisfyFunction && satisfy_function
       ) const noexcept
     {
       auto current = begin + position;
-      CPP_PC__ASSERT(current <= end);
+      CPP_PC__ASSERT (current <= end);
 
       auto rem = remaining (position);
-
-      if (rem < at_least)
-      {
-        return sub_string (current, current);
-      }
 
       auto start  = current;
       auto last   = start + std::min (rem, at_most);
@@ -235,10 +201,14 @@ namespace cpp_pc
 
     std::string error_description () const
     {
+      std::string prelude   = "Parse failure: ";
+      std::string indicator (prelude.size () + error_position, ' ');
+      indicator += '^';
+
       std::stringstream o;
       o
-        << "While parsing: " << std::string (begin, end) << std::endl
-        << "Error detected at position " << error_position + 1;
+        << prelude << std::string (begin, end) << std::endl
+        << indicator
         ;
 
       detail::collect_error_visitor visitor;
@@ -317,11 +287,11 @@ namespace cpp_pc
     }
 
 
-    std::size_t const                     error_position;
-    char const * const                    begin         ;
-    char const * const                    end           ;
+    std::size_t const   error_position;
+    char const * const  begin         ;
+    char const * const  end           ;
 
-    std::vector<base_error::ptr> mutable  errors        ;
+    base_errors mutable errors        ;
   };
 
   template<typename T>
@@ -585,11 +555,18 @@ namespace cpp_pc
   CPP_PC__PRELUDE auto preturn (TValue && v)
   {
     return detail::adapt_parser_function (
-      [v = std::forward<TValue> (v)] (state const & s, std::size_t position)
+      [v = std::forward<TValue> (v)] (state const &, std::size_t position)
       {
         return success (position, v);
       });
   }
+
+  auto const punit =
+    detail::adapt_parser_function (
+      [] (state const &, std::size_t position)
+      {
+        return success (position, unit);
+      });
 
   template<typename TParser, typename TParserGenerator>
   CPP_PC__PRELUDE auto pbind (TParser && t, TParserGenerator && fu)
@@ -945,7 +922,7 @@ namespace cpp_pc
 
           CPP_PC__ASSERT (v.value);
           CPP_PC__ASSERT (ov.value);
-          v.value = make_opt (combiner (std::move (v.value.get()), std::move (sv.value.get()), std::move (ov.value.get())));
+          v.value = make_opt (combiner (std::move (v.value.get ()), std::move (sv.value.get ()), std::move (ov.value.get())));
         }
         return v;
       });
@@ -961,65 +938,80 @@ namespace cpp_pc
       {
         s.append_error (position, error);
 
-        auto result = s.satisfy (position, at_least, at_most, satisfy_function);
+        auto result = s.satisfy (position, at_most, satisfy_function);
 
         auto consumed = result.size ();
         if (consumed < at_least)
         {
-          return failure<sub_string> (position);
+          return failure<sub_string> (position + consumed);
         }
 
         return success (position + consumed, std::move (result));
       });
   }
 
-  template<typename TSatisfyFunction>
-  CPP_PC__INLINE auto psatisfy_char (std::string expected, TSatisfyFunction && satisfy_function)
+  namespace detail
   {
-    auto p = psatisfy (std::move (expected), 1U, 1U, std::forward<TSatisfyFunction> (satisfy_function));
+    std::string char_to_string (char ch)
+    {
+      char s[] = {'\'', ch, '\'', 0};
+      return s;
+    }
+
+    base_error::ptr char_to_expected (char ch)
+    {
+      return std::make_shared<expected_error> (detail::char_to_string (ch));
+    }
+  }
+
+  CPP_PC__INLINE auto pany_of (std::string expected)
+  {
+    base_errors errors;
+    for (auto ch : expected)
+    {
+      errors.push_back (detail::char_to_expected (ch));
+    }
 
     return detail::adapt_parser_function (
-      [p = std::move (p)] (state const & s, std::size_t position)
+      [expected = std::move (expected), errors = std::move (errors)] (state const & s, std::size_t position)
       {
-        auto pv = p (s, position);
-
-        if (pv.value)
+        if (position == s.error_position)
         {
-          auto ss = pv.value.get ();
-          CPP_PC__ASSERT (ss.size () == 1U);
-          return success (pv.end, *ss.begin);
-        }
-        else
-        {
-          return pv
-#ifdef _MSC_VER
-            .fail_as<char> ()
-#else
-            .template fail_as<char> ()
-#endif
-            ;
+          for (auto && error : errors)
+          {
+            s.append_error (position, error);
+          }
         }
 
+        auto peek = s.peek (position);
+        if (peek == EOS)
+        {
+          return failure<char> (position);
+        }
+
+        auto find = expected.find (static_cast<char> (peek));
+        if (find == std::string::npos)
+        {
+          return failure<char> (position);
+        }
+
+        return success (position + 1, static_cast<char> (peek));
       });
   }
 
   template<typename TSatisfyFunction>
-  CPP_PC__PRELUDE auto pskip_satisfy (std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
+  CPP_PC__INLINE auto pskip_satisfy (std::string expected, std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
   {
-    return detail::adapt_parser_function (
-      [at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
-      {
-        auto ss = s.satisfy (position, at_least, at_most, satisfy_function);
-        return success (position + ss.size (), unit);  // TODO: Add error
-      });
+    return
+          psatisfy (std::move (expected), at_least, at_most, std::forward<TSatisfyFunction> (satisfy_function))
+      <   punit
+      ;
   }
 
   CPP_PC__INLINE auto pskip_char (char ch)
   {
-    char expected[] = {'\'', ch, '\'', 0};
-    auto error = std::make_shared<expected_error> (expected);
     return detail::adapt_parser_function (
-      [ch, error = std::move (error)] (state const & s, std::size_t position)
+      [ch, error = detail::char_to_expected (ch)] (state const & s, std::size_t position)
       {
         s.append_error (position, error);
 
@@ -1035,19 +1027,15 @@ namespace cpp_pc
       });
   }
 
-  CPP_PC__INLINE auto pskip_ws ()
-  {
-    return pskip_satisfy (0U, SIZE_MAX, satisfy_whitespace);
-  }
+  auto const pskip_ws = pskip_satisfy ("whitespace", 0U, SIZE_MAX, satisfy_whitespace);
 
   namespace detail
   {
     auto const peos_error = std::make_shared<expected_error> ("EOS");
   }
 
-  CPP_PC__INLINE auto peos ()
-  {
-    return detail::adapt_parser_function (
+  auto const peos =
+    detail::adapt_parser_function (
       [] (state const & s, std::size_t position)
       {
         s.append_error (position, detail::peos_error);
@@ -1062,36 +1050,32 @@ namespace cpp_pc
           return failure<unit_type> (position);
         }
       });
-  }
 
   namespace detail
   {
     auto const pint_error = std::make_shared<expected_error> ("integer");
   }
 
-  CPP_PC__INLINE auto pint ()
-  {
-    return detail::adapt_parser_function (
+  auto const pint =
+    detail::adapt_parser_function (
       [] (state const & s, std::size_t position)
       {
         s.append_error (position, detail::pint_error);
 
-        auto ss = s.satisfy (position, 1U, 10U, satisfy_digit);
+        auto ss = s.satisfy (position, 10U, satisfy_digit);
         auto consumed = ss.size ();
-        if (consumed > 0)
+        if (consumed == 0)
         {
-          auto i = 0;
-          for (auto iter = ss.begin; iter != ss.end; ++iter)
-          {
-            i = 10*i + (*iter - '0');
-          }
-          return success (position + consumed, i);
+          return failure<int> (position + consumed);
         }
-        else
+
+        auto i = 0;
+        for (auto iter = ss.begin; iter != ss.end; ++iter)
         {
-          return failure<int> (position);
+          i = 10*i + (*iter - '0');
         }
+
+        return success (position + consumed, i);
       });
-  }
 }
 // ----------------------------------------------------------------------------

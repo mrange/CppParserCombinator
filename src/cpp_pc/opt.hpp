@@ -174,7 +174,7 @@ namespace cpp_pc
       return reinterpret_cast<value_type *> (&storage);
     }
 
-    alignas(value_type) unsigned char storage[sizeof (value_type)];
+    alignas (value_type) unsigned char storage[sizeof (value_type)];
     bool has_value;
   };
 
