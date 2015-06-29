@@ -93,6 +93,30 @@ namespace test_parser
   }
 
   template<typename TValue>
+  std::ostream & operator << (std::ostream & o, std::vector<TValue> const & vs)
+  {
+    o
+      << "[("
+      << vs.size ()
+      << ")"
+      ;
+
+    for (auto && v : vs)
+    {
+      o
+        << ", "
+        << v
+        ;
+    }
+
+    o
+      << "]"
+      ;
+
+    return o;
+  }
+
+  template<typename TValue>
   std::ostream & operator << (std::ostream & o, opt<TValue> const & v)
   {
     if (v)
@@ -429,6 +453,42 @@ namespace test_parser
         ;
       result<unit_type> expected  = failure<unit_type> (0);
       result<unit_type> actual    = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            pmany (1, 5, pany_of ("123"))
+        ;
+      result<std::vector<char>> expected  = success (3, std::vector<char> ({'1','2','3'}));
+      result<std::vector<char>> actual    = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            pmany (1, 5, pany_of ("456"))
+        ;
+      result<std::vector<char>> expected  = failure<std::vector<char>> (0);
+      result<std::vector<char>> actual    = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            pmany (1, 2, pany_of ("123"))
+        ;
+      result<std::vector<char>> expected  = success (2, std::vector<char> ({'1','2'}));
+      result<std::vector<char>> actual    = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            pmany (5, 5, pany_of ("123"))
+        ;
+      result<std::vector<char>> expected  = failure<std::vector<char>> (0);
+      result<std::vector<char>> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 

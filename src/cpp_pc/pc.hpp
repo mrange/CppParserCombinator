@@ -716,6 +716,55 @@ namespace cpp_pc
       });
   }
 
+  template<typename TParser>
+  CPP_PC__PRELUDE auto pmany (std::size_t at_least, std::size_t at_most, TParser && t)
+  {
+    CPP_PC__CHECK_PARSER (t);
+
+    return detail::adapt_parser_function (
+      [at_least, at_most, t = std::forward<TParser> (t)] (state const & s, std::size_t position)
+      {
+        using result_type = decltype (t (s, 0))               ;
+        using value_type  = typename result_type::value_type  ;
+
+        std::vector<value_type> values;
+        values.reserve (at_least);
+
+        auto current = position;
+
+        auto cont = true;
+
+        while (cont)
+        {
+          if (values.size () >= at_most)
+          {
+            cont = false;
+            continue;
+          }
+
+          auto tv = t (s, current);
+          if (!tv.value)
+          {
+            cont = false;
+            continue;
+          }
+
+          values.push_back (std::move (tv.value.get ()));
+
+          current = tv.end;
+        }
+
+        if (values.size () >= at_least)
+        {
+          return success (current, std::move (values));
+        }
+        else
+        {
+          return failure<std::vector<value_type>> (position);
+        }
+      });
+  }
+
   namespace detail
   {
     template<typename TValue>
@@ -789,6 +838,7 @@ namespace cpp_pc
       CPP_PC__PRELUDE pchoice_impl (THead const & head)
         : head (head)
       {
+        CPP_PC__CHECK_PARSER (head);
       }
 
       CPP_PC__INLINE result<TValue> parse (state const & s, std::size_t position) const
