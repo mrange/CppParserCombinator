@@ -212,14 +212,25 @@ namespace cpp_pc
 
     std::string error_description () const
     {
+      std::string input (begin, end);
+      auto err_pos  = std::min (error_position, input.size ());
+      auto err_ch   = err_pos < input.size () ? input[err_pos] : ' ';
+
+      // TODO: Handle multiline
+
       std::string prelude   = "Parse failure: ";
-      std::string indicator (prelude.size () + error_position, ' ');
+      std::string indicator (prelude.size () + err_pos, ' ');
       indicator += '^';
 
       std::stringstream o;
       o
-        << prelude << std::string (begin, end) << std::endl
+        << prelude << input << std::endl
         << indicator
+        << std::endl
+        << "  Found '"
+        << err_ch
+        << "', position: "
+        << err_pos
         ;
 
       detail::collect_error_visitor visitor;
@@ -315,12 +326,12 @@ namespace cpp_pc
     result ()                             = delete ;
 
     CPP_PC__INLINE explicit result (std::size_t position)
-      : end       (position)
+      : position  (position)
     {
     }
 
     CPP_PC__INLINE explicit result (std::size_t position, T o)
-      : end       (position)
+      : position  (position)
       , value     (std::move (o))
     {
     }
@@ -328,24 +339,24 @@ namespace cpp_pc
     CPP_PC__PRELUDE bool operator == (result const & o) const
     {
       return
-            end   == o.end
-        &&  value == o.value
+            position  == o.position
+        &&  value     == o.value
         ;
     }
 
-    CPP_PC__INLINE result<value_type> & reposition (std::size_t e)
+    CPP_PC__INLINE result<value_type> & reposition (std::size_t p)
     {
-      end = e;
+      position = p;
       return *this;
     }
 
     template<typename TOther>
     CPP_PC__PRELUDE result<TOther> fail_as () const
     {
-      return result<TOther> (end);
+      return result<TOther> (position);
     }
 
-    std::size_t     end       ;
+    std::size_t     position  ;
     opt<T>          value     ;
   };
 
@@ -524,17 +535,17 @@ namespace cpp_pc
       auto v = p (s, 0);
       if (v.value)
       {
-        return parse_result<TValueType> (v.end, std::move (v.value), std::string ());
+        return parse_result<TValueType> (v.position, std::move (v.value), std::string ());
       }
       else
       {
-        state es (v.end, begin, end);
+        state es (v.position, begin, end);
         auto ev = p (es, 0);
 
-        CPP_PC__ASSERT (v.end == ev.end);
+        CPP_PC__ASSERT (v.position == ev.position);
         CPP_PC__ASSERT (!ev.value);
 
-        return parse_result<TValueType> (ev.end, empty_opt, es.error_description ());
+        return parse_result<TValueType> (ev.position, empty_opt, es.error_description ());
       }
     }
   }
@@ -593,10 +604,10 @@ namespace cpp_pc
 
         if (tv.value)
         {
-          auto tu = fu (std::move (tv.value.get ())) (s, tv.end);
+          auto tu = fu (std::move (tv.value.get ())) (s, tv.position);
 
           return tu
-            .reposition (tu.end)
+            .reposition (tu.position)
             ;
         }
         else
@@ -627,11 +638,11 @@ namespace cpp_pc
         auto tv = t (s, position);
         if (tv.value)
         {
-          auto tu = u (s, tv.end);
+          auto tu = u (s, tv.position);
           if (tu.value)
           {
             return tv
-              .reposition (tu.end)
+              .reposition (tu.position)
               ;
           }
           else
@@ -642,7 +653,7 @@ namespace cpp_pc
 #else
               .template fail_as<value_type> ()
 #endif
-              .reposition (tu.end)
+              .reposition (tu.position)
               ;
           }
         }
@@ -668,9 +679,9 @@ namespace cpp_pc
         auto tv = t (s, position);
         if (tv.value)
         {
-          auto tu = u (s, tv.end);
+          auto tu = u (s, tv.position);
           return tu
-            .reposition (tu.end)
+            .reposition (tu.position)
             ;
         }
         else
@@ -701,7 +712,7 @@ namespace cpp_pc
 
         if (tv.value)
         {
-          return success (tv.end, m (std::move (tv.value.get())));
+          return success (tv.position, m (std::move (tv.value.get())));
         }
         else
         {
@@ -751,7 +762,7 @@ namespace cpp_pc
 
           values.push_back (std::move (tv.value.get ()));
 
-          current = tv.end;
+          current = tv.position;
         }
 
         if (values.size () >= at_least)
@@ -944,13 +955,13 @@ namespace cpp_pc
             ;
         }
 
-        auto v = parser (s, bv.end);
+        auto v = parser (s, bv.position);
         if (!v.value)
         {
           return v;
         }
 
-        auto ev = end_parser (s, v.end);
+        auto ev = end_parser (s, v.position);
         if (!ev.value)
         {
           return ev
@@ -963,7 +974,7 @@ namespace cpp_pc
         }
 
         return v
-          .reposition (ev.end)
+          .reposition (ev.position)
           ;
       });
   }
@@ -995,20 +1006,20 @@ namespace cpp_pc
 
         while (cont)
         {
-          auto sv = sep_parser (s, v.end);
+          auto sv = sep_parser (s, v.position);
           if (!sv.value)
           {
             cont = false;
             continue;
           }
 
-          auto ov = parser (s, sv.end);
+          auto ov = parser (s, sv.position);
           if (!ov.value)
           {
             return ov
               ;
           }
-          v.reposition (ov.end);
+          v.reposition (ov.position);
 
           CPP_PC__ASSERT (v.value);
           CPP_PC__ASSERT (ov.value);

@@ -140,7 +140,7 @@ namespace test_parser
   {
     o
       << "{result: "
-      << v.end
+      << v.position
       << ", "
       << v.value
       << "}"
