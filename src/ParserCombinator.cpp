@@ -494,6 +494,51 @@ namespace test_parser
 
     {
       auto p =
+            ptuple (pskip_char ('1'), pskip_char ('2') < preturn (1))
+        ;
+      result<std::tuple<unit_type, int>> expected = success (2, std::make_tuple (unit, 1));
+      result<std::tuple<unit_type, int>> actual   = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            ptuple (pskip_char ('2'), pskip_char ('1') < preturn (1))
+        ;
+      result<std::tuple<unit_type, int>> expected = failure<std::tuple<unit_type, int>> (0);
+      result<std::tuple<unit_type, int>> actual   = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            ptuple (pskip_char ('1'), pskip_char ('1') < preturn (1))
+        ;
+      result<std::tuple<unit_type, int>> expected = failure<std::tuple<unit_type, int>> (1);
+      result<std::tuple<unit_type, int>> actual   = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            popt (pskip_char ('1'))
+        ;
+      result<opt<unit_type>> expected  = success (1, make_opt (unit));
+      result<opt<unit_type>> actual    = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            popt (pskip_char ('2'))
+        ;
+      result<opt<unit_type>> expected  = success (0, opt<unit_type> ());
+      result<opt<unit_type>> actual    = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
             pint
         >   pskip_ws
         >   pskip_char ('+')
@@ -519,7 +564,6 @@ namespace test_parser
     }
 
     // TODO:
-    // pany_of
     // punit
     // pchoice
     // ptrampoline
@@ -528,6 +572,7 @@ namespace test_parser
     // psep
     // peos
     // pskip_satisfy
+    // psatisfy_char
   }
 }
 // ----------------------------------------------------------------------------
@@ -792,9 +837,73 @@ namespace json
 
   constexpr null_type null_value;
 
+  auto satisfy_char = [] (std::size_t, char ch)
+    {
+      return ch != '"' && ch != '\\';
+    };
+  auto map_escaped = [] (char ch)
+    {
+      switch (ch)
+      {
+      case '"':
+        return '"';
+      case '\\':
+        return '\\';
+      case '/':
+        return '/';
+      case 'b':
+        return '\b';
+      case 'f':
+        return '\f';
+      case 'n':
+        return '\n';
+      case 'r':
+        return '\r';
+      case 't':
+        return '\t';
+      default:
+        CPP_PC__ASSERT (false);
+        return ch;
+      };
+    };
+
+  auto pchar    = psatisfy_char ("char", satisfy_char);
+  auto pescaped = pskip_char ('\\') < pmap (pany_of ("\"\\/bfnrt"), map_escaped);
+  auto pchars   = pmany (0, SIZE_MAX, pchoice (pchar, pescaped));
+  auto pstring  = pbetween (pskip_char ('"'), pchars, pskip_char ('"'));
+
+  auto pfrac    = popt (pskip_char ('.') < pint);
+  auto psign    = popt (pany_of ("+-"));
+  auto pexp     = popt (pany_of ("eE") < pint);
+  auto pnumber  = ptuple (popt (pskip_char ('-')), pint, pfrac, pexp);
+
   auto ptrue    = pskip_string ("true")   < preturn (true);
+
   auto pfalse   = pskip_string ("false")  < preturn (false);
+
   auto pnull    = pskip_string ("null")   < preturn (null_value);
+
+  void parse_and_print (const std::string & input)
+  {
+    auto r = parse (pstring, input);
+    if (r.value)
+    {
+      auto v = r.value.get ();
+      auto s = std::string (v.begin (), v.end ());
+      std::cout << s << std::endl;
+    }
+    else
+    {
+      std::cout << r.message << std::endl;
+    }
+  }
+
+
+  void test_json ()
+  {
+    parse_and_print (R"("Hello")");
+    parse_and_print (R"("Hello\r\n\tThere")");
+  };
 }
 // ----------------------------------------------------------------------------
 
@@ -805,6 +914,7 @@ int main()
   test_parser::test_opt<std::string> ("1234", "5678");
   test_parser::test_opt<int> (1,3);
   test_parser::test_parser ();
+  json::test_json ();
   calculator::test_calculator ();
   std::cout << "Done!" << std::endl;
   return 0;

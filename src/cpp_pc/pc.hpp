@@ -20,6 +20,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 // ----------------------------------------------------------------------------
@@ -325,12 +326,12 @@ namespace cpp_pc
 
     result ()                             = delete ;
 
-    CPP_PC__INLINE explicit result (std::size_t position)
+    CPP_PC__PRELUDE explicit result (std::size_t position)
       : position  (position)
     {
     }
 
-    CPP_PC__INLINE explicit result (std::size_t position, T o)
+    CPP_PC__PRELUDE explicit result (std::size_t position, T o)
       : position  (position)
       , value     (std::move (o))
     {
@@ -492,7 +493,7 @@ namespace cpp_pc
   }
 
   template<typename T>
-  CPP_PC__INLINE auto failure (std::size_t position)
+  CPP_PC__PRELUDE auto failure (std::size_t position)
   {
     return result<T> (position);
   }
@@ -561,6 +562,7 @@ namespace cpp_pc
       {
       case ' ':
       case '\b':
+      case '\f':
       case '\n':
       case '\r':
       case '\t':
@@ -705,7 +707,6 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t), m = std::forward<TMapper> (m)] (state const & s, std::size_t position)
       {
-
         auto tv = t (s, position);
 
         using value_type  = decltype (m (std::move (tv.value.get()))) ;
@@ -723,6 +724,30 @@ namespace cpp_pc
             .template fail_as<value_type> ()
 #endif
             ;
+        }
+      });
+  }
+
+  template<typename TParser>
+  CPP_PC__PRELUDE auto popt (TParser && t)
+  {
+    CPP_PC__CHECK_PARSER (t);
+
+    return detail::adapt_parser_function (
+      [t = std::forward<TParser> (t)] (state const & s, std::size_t position)
+      {
+        using result_type = decltype (t (s, 0))               ;
+        using value_type  = typename result_type::value_type  ;
+
+        auto tv = t (s, position);
+
+        if (tv.value)
+        {
+          return success<opt<value_type>> (tv.position, std::move (tv.value));
+        }
+        else
+        {
+          return success<opt<value_type>> (tv.position, empty_opt);
         }
       });
   }
@@ -852,10 +877,9 @@ namespace cpp_pc
         CPP_PC__CHECK_PARSER (head);
       }
 
-      CPP_PC__INLINE result<TValue> parse (state const & s, std::size_t position) const
+      CPP_PC__PRELUDE result<TValue> parse (state const & s, std::size_t position) const
       {
-        auto hv = head (s, position);
-        return hv;
+        return head (s, position);
       }
 
       THead head;
@@ -871,7 +895,7 @@ namespace cpp_pc
 
       CPP_PC__CTOR_COPY_MOVE (pchoice_impl);
 
-      // TODO: Forward parsers
+      // TODO: Perfect forward
       CPP_PC__PRELUDE pchoice_impl (THead const & head, TTail const &... tail)
         : base_type (tail...)
         , head (head)
@@ -907,7 +931,7 @@ namespace cpp_pc
     using value_type = detail::parser_value_type_t<TParser>;
 
     detail::pchoice_impl<value_type, TParser, TParsers...> impl (
-      // TODO: Perfect forward
+        // TODO: Perfect forward
         parser
       , parsers...
       );
@@ -915,20 +939,95 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [impl = std::move (impl)] (state const & s, std::size_t position)
       {
-        if (s.error_position == position)
+        return impl.parse (s, position);
+      });
+  }
+
+  namespace detail
+  {
+    template<typename ...TParsers>
+    struct ptuple_impl;
+
+    template<>
+    struct ptuple_impl<>
+    {
+      ptuple_impl () = default;
+
+      CPP_PC__CTOR_COPY_MOVE (ptuple_impl);
+
+      template<typename ...TTypes>
+      CPP_PC__PRELUDE auto fail (std::size_t position) const
+      {
+        return failure<std::tuple<TTypes...>> (position);
+      }
+
+      template<typename ...TTypes>
+      CPP_PC__PRELUDE auto parse (state const &, std::size_t position, TTypes const &... values) const
+      {
+        // TODO: Perfect forward
+        return success (position, std::tuple<TTypes...> (values...));
+      }
+
+    };
+
+    template<typename THead, typename... TTail>
+    struct ptuple_impl<THead, TTail...> : ptuple_impl<TTail...>
+    {
+      using base_type   = ptuple_impl<TTail...>;
+      using value_type  = detail::parser_value_type_t<THead>;
+
+      CPP_PC__CTOR_COPY_MOVE (ptuple_impl);
+
+      // TODO: Perfect forward
+      CPP_PC__PRELUDE ptuple_impl (THead const & head, TTail const &... tail)
+        : base_type (tail...)
+        , head (head)
+      {
+      }
+
+      template<typename ...TTypes>
+      CPP_PC__PRELUDE auto fail (std::size_t position) const
+      {
+        return base_type::fail<TTypes..., value_type> (position);
+      }
+
+      template<typename ...TTypes>
+      CPP_PC__INLINE auto parse (state const & s, std::size_t position, TTypes const &... values) const
+      {
+        auto hv = head (s, position);
+        if (hv.value)
         {
-          auto tv = impl.parse (s, position);
-          return tv;
+          // TODO: Perfect forward
+          return base_type::parse<TTypes..., value_type> (s, hv.position, values..., hv.value.get ());
         }
         else
         {
-          return impl.parse (s, position);
+          return fail<TTypes...> (position);
         }
+      }
+
+      THead head;
+    };
+
+  }
+
+  template<typename ...TParsers>
+  CPP_PC__INLINE auto ptuple (TParsers && ...parsers)
+  {
+    detail::ptuple_impl<TParsers...> impl (
+        // TODO: Perfect forward
+        parsers...
+      );
+
+    return detail::adapt_parser_function (
+      [impl = std::move (impl)] (state const & s, std::size_t position)
+      {
+        return impl.parse (s, position);
       });
   }
 
   template<typename TBeginParser, typename TParser, typename TEndParser>
-  CPP_PC__INLINE auto pbetween (
+  CPP_PC__PRELUDE auto pbetween (
       TBeginParser  && begin_parser
     , TParser       && parser
     , TEndParser    && end_parser
@@ -980,7 +1079,7 @@ namespace cpp_pc
   }
 
   template<typename TParser, typename TSepParser, typename TCombiner>
-  CPP_PC__INLINE auto psep (
+  CPP_PC__PRELUDE auto psep (
       TParser       && parser
     , TSepParser    && sep_parser
     , TCombiner     && combiner
@@ -1030,7 +1129,7 @@ namespace cpp_pc
   }
 
   template<typename TSatisfyFunction>
-  CPP_PC__INLINE auto psatisfy (std::string expected, std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
+  CPP_PC__PRELUDE auto psatisfy (std::string expected, std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
   {
     return detail::adapt_parser_function (
       [error = detail::make_expected (std::move (expected)), at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
@@ -1046,6 +1145,31 @@ namespace cpp_pc
         }
 
         return success (position + consumed, std::move (result));
+      });
+  }
+
+  template<typename TSatisfyFunction>
+  CPP_PC__PRELUDE auto psatisfy_char (std::string expected, TSatisfyFunction && satisfy_function)
+  {
+    return detail::adapt_parser_function (
+      [error = detail::make_expected (std::move (expected)), satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
+      {
+        s.append_error (position, error);
+
+        auto peek = s.peek (position);
+        if (peek == EOS)
+        {
+          return failure<char> (position);
+        }
+
+        auto result = static_cast<char> (peek);
+
+        if (!satisfy_function (0, result))
+        {
+          return failure<char> (position);
+        }
+
+        return success (position + 1, result);
       });
   }
 
@@ -1099,7 +1223,7 @@ namespace cpp_pc
   }
 
   template<typename TSatisfyFunction>
-  CPP_PC__INLINE auto pskip_satisfy (std::string expected, std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
+  CPP_PC__PRELUDE auto pskip_satisfy (std::string expected, std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
   {
     return
           psatisfy (std::move (expected), at_least, at_most, std::forward<TSatisfyFunction> (satisfy_function))
