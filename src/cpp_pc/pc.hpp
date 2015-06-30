@@ -351,12 +351,6 @@ namespace cpp_pc
       return *this;
     }
 
-    template<typename TOther>
-    CPP_PC__PRELUDE result<TOther> fail_as () const
-    {
-      return result<TOther> (position);
-    }
-
     std::size_t     position  ;
     opt<T>          value     ;
   };
@@ -614,13 +608,7 @@ namespace cpp_pc
         }
         else
         {
-          return tv
-#ifdef _MSC_VER
-            .fail_as<value_type> ()
-#else
-            .template fail_as<value_type> ()
-#endif
-            ;
+          return failure<value_type> (tv.position);
         }
       });
   }
@@ -649,14 +637,7 @@ namespace cpp_pc
           }
           else
           {
-            return tu
-#ifdef _MSC_VER
-              .fail_as<value_type> ()
-#else
-              .template fail_as<value_type> ()
-#endif
-              .reposition (tu.position)
-              ;
+            return failure<value_type> (tu.position);
           }
         }
         else
@@ -688,13 +669,7 @@ namespace cpp_pc
         }
         else
         {
-          return tv
-#ifdef _MSC_VER
-            .fail_as<value_type> ()
-#else
-            .template fail_as<value_type> ()
-#endif
-            ;
+          return failure<value_type> (tv.position);
         }
       });
   }
@@ -717,13 +692,7 @@ namespace cpp_pc
         }
         else
         {
-          return tv
-#ifdef _MSC_VER
-            .fail_as<value_type> ()
-#else
-            .template fail_as<value_type> ()
-#endif
-            ;
+          return failure<value_type> (tv.position);
         }
       });
   }
@@ -990,7 +959,7 @@ namespace cpp_pc
       template<typename ...TTypes>
       CPP_PC__PRELUDE auto fail (std::size_t position) const
       {
-        return base_type::fail<TTypes..., value_type> (position);
+        return base_type::template fail<TTypes..., value_type> (position);
       }
 
       template<typename ...TTypes>
@@ -1000,7 +969,7 @@ namespace cpp_pc
         if (hv.value)
         {
           // TODO: Perfect forward
-          return base_type::parse<TTypes..., value_type> (s, hv.position, values..., hv.value.get ());
+          return base_type::template parse<TTypes..., value_type> (s, hv.position, values..., hv.value.get ());
         }
         else
         {
@@ -1047,13 +1016,7 @@ namespace cpp_pc
         auto bv = begin_parser (s, position);
         if (!bv.value)
         {
-          return bv
-#ifdef _MSC_VER
-            .fail_as<value_type> ()
-#else
-            .template fail_as<value_type> ()
-#endif
-            ;
+          return failure<value_type> (bv.position);
         }
 
         auto v = parser (s, bv.position);
@@ -1065,13 +1028,7 @@ namespace cpp_pc
         auto ev = end_parser (s, v.position);
         if (!ev.value)
         {
-          return ev
-#ifdef _MSC_VER
-            .fail_as<value_type> ()
-#else
-            .template fail_as<value_type> ()
-#endif
-            ;
+          return failure<value_type> (ev.position);
         }
 
         return v
@@ -1131,7 +1088,7 @@ namespace cpp_pc
   }
 
   template<typename TSatisfyFunction>
-  CPP_PC__PRELUDE auto psatisfy (std::string expected, std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
+  CPP_PC__INLINE auto psatisfy (std::string expected, std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
   {
     return detail::adapt_parser_function (
       [error = detail::make_expected (std::move (expected)), at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
@@ -1151,7 +1108,7 @@ namespace cpp_pc
   }
 
   template<typename TSatisfyFunction>
-  CPP_PC__PRELUDE auto psatisfy_char (std::string expected, TSatisfyFunction && satisfy_function)
+  CPP_PC__INLINE auto psatisfy_char (std::string expected, TSatisfyFunction && satisfy_function)
   {
     return detail::adapt_parser_function (
       [error = detail::make_expected (std::move (expected)), satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
@@ -1225,7 +1182,7 @@ namespace cpp_pc
   }
 
   template<typename TSatisfyFunction>
-  CPP_PC__PRELUDE auto pskip_satisfy (std::string expected, std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
+  CPP_PC__INLINE auto pskip_satisfy (std::string expected, std::size_t at_least, std::size_t at_most, TSatisfyFunction && satisfy_function)
   {
     return
           psatisfy (std::move (expected), at_least, at_most, std::forward<TSatisfyFunction> (satisfy_function))
