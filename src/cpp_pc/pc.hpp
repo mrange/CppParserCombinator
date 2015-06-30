@@ -900,6 +900,7 @@ namespace cpp_pc
         : base_type (tail...)
         , head (head)
       {
+        CPP_PC__CHECK_PARSER (head);
       }
 
       CPP_PC__INLINE result<TValue> parse (state const & s, std::size_t position) const
@@ -983,6 +984,7 @@ namespace cpp_pc
         : base_type (tail...)
         , head (head)
       {
+        CPP_PC__CHECK_PARSER (head);
       }
 
       template<typename ...TTypes>
@@ -1134,14 +1136,14 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [error = detail::make_expected (std::move (expected)), at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
       {
-        s.append_error (position, error);
-
         auto result = s.satisfy (position, at_most, satisfy_function);
-
         auto consumed = result.size ();
+
+        s.append_error (position + consumed, error);
+
         if (consumed < at_least)
         {
-          return failure<sub_string> (position);
+          return failure<sub_string> (position + consumed);
         }
 
         return success (position + consumed, std::move (result));
@@ -1252,6 +1254,7 @@ namespace cpp_pc
 
   CPP_PC__INLINE auto pskip_string (std::string str)
   {
+    // TODO: Fix error position by doing full implementation
     auto sz = str.size ();
     auto expected =  '"' + str + '"';
     auto satisfy = [str = std::move (str)] (std::size_t pos, char ch)
@@ -1288,29 +1291,82 @@ namespace cpp_pc
 
   namespace detail
   {
-    auto const pint_error = detail::make_expected ("integer");
+    auto const pdigit_error   = detail::make_expected ("digit");
+    auto const pinteger_error = detail::make_expected ("integer");
   }
 
-  auto const pint =
+  auto const praw_uint64 =
     detail::adapt_parser_function (
       [] (state const & s, std::size_t position)
       {
-        s.append_error (position, detail::pint_error);
-
-        auto ss = s.satisfy (position, 10U, satisfy_digit);
+        auto ss = s.satisfy (position, 20U, satisfy_digit);
         auto consumed = ss.size ();
+
+        s.append_error (position + consumed, detail::pdigit_error);
+
         if (consumed == 0)
         {
-          return failure<int> (position);
+          return failure<std::tuple<std::uint64_t, std::size_t>> (position + consumed);
         }
 
-        auto i = 0;
+        std::uint64_t i = 0;
         for (auto iter = ss.begin; iter != ss.end; ++iter)
         {
-          i = 10*i + (*iter - '0');
+          i = 10*i + static_cast<std::uint64_t> (*iter - '0');
         }
 
-        return success (position + consumed, i);
+        return success (position + consumed, std::make_tuple (i, consumed));
       });
+
+  auto const pint64 =
+    detail::adapt_parser_function (
+      [] (state const & s, std::size_t position)
+      {
+        s.append_error (position, detail::pinteger_error);
+
+        auto sign = 1         ;
+        auto pos  = position  ;
+
+        auto peek = s.peek (pos) ;
+        switch (peek)
+        {
+        case EOS:
+          return failure<std::int64_t> (position);
+        case '+':
+          ++pos;
+          break;
+        case '-':
+          sign = -1;
+          ++pos;
+          break;
+        default:
+
+          break;
+        }
+
+        auto ss = s.satisfy (pos, 20U, satisfy_digit);
+        auto consumed = ss.size ();
+
+        if (consumed == 0)
+        {
+          return failure<std::int64_t> (pos + consumed);
+        }
+
+        std::int64_t i = 0;
+        for (auto iter = ss.begin; iter != ss.end; ++iter)
+        {
+          i = 10*i + static_cast<std::int64_t> (*iter - '0');
+        }
+
+        i *= sign;
+
+        return success (pos + consumed, i);
+      });
+
+  auto const puint64  = pmap (praw_uint64, [] (auto && v) { return std::get<0> (v); });
+  auto const puint32  = pmap (praw_uint64, [] (auto && v) { return static_cast<std::uint32_t> (std::get<0> (v)); });
+
+  auto const pint32   = pmap (pint64, [] (auto && v) { return static_cast<std::int32_t> (v); });
+  auto const pint     = pint32;
 }
 // ----------------------------------------------------------------------------

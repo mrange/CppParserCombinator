@@ -162,6 +162,19 @@ namespace cpp_pc
       }
     }
 
+    TValue const & coalesce (TValue const & v) const
+    {
+      if (has_value)
+      {
+        return get ();
+      }
+      else
+      {
+        return v;
+      }
+    }
+
+
   private:
 
     CPP_PC__PRELUDE value_type const * get_ptr () const noexcept

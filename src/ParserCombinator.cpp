@@ -382,6 +382,7 @@ namespace test_parser
       TEST_EQ (expected, actual);
     }
 
+    // Extend pint test to test +/-
     {
       auto p =
             pint
@@ -413,7 +414,7 @@ namespace test_parser
       auto p =
             pskip_string ("124")
         ;
-      result<unit_type> expected  = failure<unit_type> (0);
+      result<unit_type> expected  = failure<unit_type> (2);
       result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -433,7 +434,7 @@ namespace test_parser
             pskip_string ("124")
         <   preturn (true)
         ;
-      result<bool> expected  = failure<bool> (0);
+      result<bool> expected  = failure<bool> (2);
       result<bool> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -867,15 +868,48 @@ namespace json
       };
     };
 
+  auto map_number = [] (auto && v)
+    {
+      auto calculate_fraction = [] (auto && frac)
+        {
+          auto i = static_cast<double> (std::get<0> (frac));
+          auto s = std::get<1> (frac);
+          return i / std::pow (10.0, s);
+        };
+
+      auto calculate_exponent = [] (auto && exp)
+        {
+          auto sign   = (std::get<0> (exp).coalesce ('+') == '+') ? 1.0 : -1.0;
+          auto e      = std::get<1> (exp);
+          return std::pow (10.0, sign*e);
+        };
+
+      auto sign = std::get<0> (v) ? -1.0 : 1.0;
+      auto i    = static_cast<double> (std::get<1> (v));
+      auto ofrac= std::get<2> (v);
+      auto frac =
+          ofrac
+        ? calculate_fraction (ofrac.get ())
+        : 0.0
+        ;
+      auto oexp = std::get<3> (v);
+      auto exp =
+          oexp
+        ? calculate_exponent (oexp.get ())
+        : 1.0
+        ;
+      return sign * (i + frac) * exp;
+    };
+
   auto pchar    = psatisfy_char ("char", satisfy_char);
   auto pescaped = pskip_char ('\\') < pmap (pany_of ("\"\\/bfnrt"), map_escaped);
   auto pchars   = pmany (0, SIZE_MAX, pchoice (pchar, pescaped));
   auto pstring  = pbetween (pskip_char ('"'), pchars, pskip_char ('"'));
 
-  auto pfrac    = popt (pskip_char ('.') < pint);
+  auto pfrac    = popt (pskip_char ('.') < praw_uint64);
   auto psign    = popt (pany_of ("+-"));
-  auto pexp     = popt (pany_of ("eE") < pint);
-  auto pnumber  = ptuple (popt (pskip_char ('-')), pint, pfrac, pexp);
+  auto pexp     = popt (pany_of ("eE") < ptuple (psign, pint));
+  auto pnumber  = pmap (ptuple (popt (pskip_char ('-')), pint64, pfrac, pexp), map_number);
 
   auto ptrue    = pskip_string ("true")   < preturn (true);
 
@@ -883,14 +917,31 @@ namespace json
 
   auto pnull    = pskip_string ("null")   < preturn (null_value);
 
+  auto pvalue   = pnull > pskip_ws;
+  auto pvalues  = pmany (0, SIZE_MAX, pvalue > pskip_char (',') > pskip_ws);
+
+  auto parray   = pbetween (pskip_char ('[') > pskip_ws, pvalues, pskip_char (']') > pskip_ws);
+
+  auto pmember  = ptuple (pstring > pskip_ws > pskip_char (':') > pskip_ws, pvalue);
+  auto pmembers = pmany (0, SIZE_MAX, pmember > pskip_char (',') > pskip_ws);
+  auto pobject  = pbetween (pskip_char ('{') > pskip_ws, pmembers, pskip_char ('}') > pskip_ws);
+
+//  auto pjson    = pskip_ws > pchoice (parray, pobject) > peos;
+
   void parse_and_print (const std::string & input)
   {
-    auto r = parse (pstring, input);
+    auto r = parse (pnumber > peos, input);
     if (r.value)
     {
-      auto v = r.value.get ();
-      auto s = std::string (v.begin (), v.end ());
-      std::cout << s << std::endl;
+
+      double v = r.value.get ();
+      //auto s = std::string (v.begin (), v.end ());
+      std::cout
+        << input
+        << " : "
+        << v
+        << std::endl
+        ;
     }
     else
     {
@@ -901,8 +952,14 @@ namespace json
 
   void test_json ()
   {
-    parse_and_print (R"("Hello")");
-    parse_and_print (R"("Hello\r\n\tThere")");
+    //parse_and_print (R"("Hello")");
+    //parse_and_print (R"("Hello\r\n\tThere")");
+    parse_and_print ("1.0g32");
+    parse_and_print ("-2");
+    parse_and_print ("2.171828");
+    parse_and_print ("1.32E3");
+    parse_and_print ("2e-2");
+    parse_and_print ("3.1415e10");
   };
 }
 // ----------------------------------------------------------------------------
