@@ -637,11 +637,7 @@ namespace cpp_pc
 
         if (tv.value)
         {
-          auto tu = fu (std::move (tv.value.get ())) (s, tv.position);
-
-          return tu
-            .reposition (tu.position)
-            ;
+          return fu (std::move (tv.value.get ())) (s, tv.position);
         }
         else
         {
@@ -664,16 +660,16 @@ namespace cpp_pc
         auto tv = t (s, position);
         if (tv.value)
         {
-          auto tu = u (s, tv.position);
-          if (tu.value)
+          auto uv = u (s, tv.position);
+          if (uv.value)
           {
             return tv
-              .reposition (tu.position)
+              .reposition (uv.position)
               ;
           }
           else
           {
-            return result_type::failure (tu.position);
+            return result_type::failure (uv.position);
           }
         }
         else
@@ -697,10 +693,7 @@ namespace cpp_pc
         auto tv = t (s, position);
         if (tv.value)
         {
-          auto tu = u (s, tv.position);
-          return tu
-            .reposition (tu.position)
-            ;
+          return u (s, tv.position);
         }
         else
         {
