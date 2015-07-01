@@ -58,3 +58,53 @@ auto pcalculator_expr = [] ()
 } ();
 
 ```
+
+A slightly more interesting example is a JSON parser:
+
+```c++
+// JSON specification: http://json.org/
+auto json_null_value  = json_null::create ();
+auto json_true_value  = json_boolean::create (true);
+auto json_false_value = json_boolean::create (false);
+
+auto parray_trampoline  = create_trampoline<json_ast::ptr> ();
+auto parray             = ptrampoline<json_ast::ptr> (parray_trampoline);
+
+auto pobject_trampoline = create_trampoline<json_ast::ptr> ();
+auto pobject            = ptrampoline<json_ast::ptr> (pobject_trampoline);
+
+auto pnchar   = psatisfy_char ("char", satisfy_char);
+auto pescaped = pskip_char ('\\') < pmap (pany_of ("\"\\/bfnrt"), map_escaped);
+// TODO: Handle unicode escaping (\u)
+auto pchar    = pchoice (pnchar, pescaped);
+auto pchars   = pbetween (pskip_char ('"'), pmany_char (0, SIZE_MAX, pchar), pskip_char ('"'));
+auto pstring  = pmap (pchars, json_string::create);
+
+auto pfrac    = popt (pskip_char ('.') < praw_uint64);
+auto psign    = popt (pany_of ("+-"));
+auto pexp     = popt (pany_of ("eE") < ptuple (psign, pint));
+// TODO: Handle that 0123 is not allowed
+auto pnumber  = pmap (ptuple (popt (pskip_char ('-')), puint64, pfrac, pexp), map_number);
+
+auto ptrue    = pskip_string ("true")   < preturn (json_true_value);
+
+auto pfalse   = pskip_string ("false")  < preturn (json_false_value);
+
+auto pnull    = pskip_string ("null")   < preturn (json_null_value);
+
+auto pvalue   = pchoice (pstring, pnumber, ptrue, pfalse, pnull, parray, pobject) > pskip_ws;
+
+auto pvalues  = pmany_sepby (0, SIZE_MAX, false, pvalue, pskip_char (',') > pskip_ws);
+auto parray_  = pmap (pbetween (pskip_char ('[') > pskip_ws, pvalues, pskip_char (']') > pskip_ws), json_array::create);
+
+auto pmember  = ptuple (pchars > pskip_ws > pskip_char (':') > pskip_ws, pvalue);
+auto pmembers = pmany_sepby (0, SIZE_MAX, false, pmember, pskip_char (',') > pskip_ws);
+auto pobject_ = pmap (pbetween (pskip_char ('{') > pskip_ws, pmembers, pskip_char ('}') > pskip_ws), json_object::create);
+
+auto pjson = [] ()
+{
+  parray_trampoline->trampoline   = parray_.parser_function;
+  pobject_trampoline->trampoline  = pobject_.parser_function;
+  return pskip_ws < pchoice (parray, pobject) > pskip_ws > peos;
+} ();
+```

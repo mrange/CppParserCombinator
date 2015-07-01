@@ -1012,10 +1012,6 @@ namespace json
     }
   };
 
-  auto json_null_value  = json_null::create ();
-  auto json_true_value  = json_boolean::create (true);
-  auto json_false_value = json_boolean::create (false);
-
   auto satisfy_char = [] (std::size_t, char ch)
     {
       return ch != '"' && ch != '\\';
@@ -1081,6 +1077,11 @@ namespace json
       return json_number::create (result);
     };
 
+  // JSON specification: http://json.org/
+  auto json_null_value  = json_null::create ();
+  auto json_true_value  = json_boolean::create (true);
+  auto json_false_value = json_boolean::create (false);
+
   auto parray_trampoline  = create_trampoline<json_ast::ptr> ();
   auto parray             = ptrampoline<json_ast::ptr> (parray_trampoline);
 
@@ -1089,6 +1090,7 @@ namespace json
 
   auto pnchar   = psatisfy_char ("char", satisfy_char);
   auto pescaped = pskip_char ('\\') < pmap (pany_of ("\"\\/bfnrt"), map_escaped);
+  // TODO: Handle unicode escaping (\u)
   auto pchar    = pchoice (pnchar, pescaped);
   auto pchars   = pbetween (pskip_char ('"'), pmany_char (0, SIZE_MAX, pchar), pskip_char ('"'));
   auto pstring  = pmap (pchars, json_string::create);
@@ -1096,7 +1098,8 @@ namespace json
   auto pfrac    = popt (pskip_char ('.') < praw_uint64);
   auto psign    = popt (pany_of ("+-"));
   auto pexp     = popt (pany_of ("eE") < ptuple (psign, pint));
-  auto pnumber  = pmap (ptuple (popt (pskip_char ('-')), pint64, pfrac, pexp), map_number);
+  // TODO: Handle that 0123 is not allowed
+  auto pnumber  = pmap (ptuple (popt (pskip_char ('-')), puint64, pfrac, pexp), map_number);
 
   auto ptrue    = pskip_string ("true")   < preturn (json_true_value);
 
