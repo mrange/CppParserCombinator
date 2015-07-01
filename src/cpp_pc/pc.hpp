@@ -39,10 +39,11 @@ namespace cpp_pc
   {
     CPP_PC__CTOR_COPY_MOVE (sub_string);
 
-    CPP_PC__PRELUDE sub_string (char const * begin, char const * end)
+    CPP_PC__INLINE sub_string (char const * begin, char const * end)
       : begin   (begin)
       , end     (end)
     {
+      CPP_PC__ASSERT (begin <= end);
     }
 
     CPP_PC__INLINE std::string str () const
@@ -147,6 +148,27 @@ namespace cpp_pc
     };
   }
 
+  auto satisfy_digit = [] (std::size_t, char ch)
+    {
+      return ch >= '0' && ch <= '9';
+    };
+
+  auto satisfy_whitespace = [] (std::size_t, char ch)
+    {
+      switch (ch)
+      {
+      case ' ':
+      case '\b':
+      case '\f':
+      case '\n':
+      case '\r':
+      case '\t':
+        return true;
+      default:
+        return false;
+      }
+    };
+
   struct state
   {
     CPP_PC__NO_COPY_MOVE (state);
@@ -155,8 +177,8 @@ namespace cpp_pc
 
     state (std::size_t error_position, char const * begin, char const * end) noexcept
       : error_position(error_position)
-      , begin         (begin)
-      , end           (end)
+      , begin         (std::min (begin, end))
+      , end           (std::max (begin, end))
     {
       CPP_PC__ASSERT (begin <= end);
     }
@@ -213,13 +235,43 @@ namespace cpp_pc
 
     std::string error_description () const
     {
-      std::string input (begin, end);
-      auto err_pos  = std::min (error_position, input.size ());
+      CPP_PC__ASSERT (begin <= end);
+
+      std::string prelude   = "Parse failure: ";
+
+      auto input_sz         = static_cast<std::size_t> (end - begin);
+      auto wsize            = std::min (input_sz, 80U - prelude.size ());
+      auto hwsize           = wsize / 2;
+      auto desired_err_pos  = std::min (error_position, input_sz);
+      auto err_pos          = static_cast<std::size_t> (0);
+
+      std::string input;
+
+      if (input_sz > wsize)
+      {
+        auto abegin           = (desired_err_pos < hwsize)            ? 0U      : desired_err_pos - hwsize;
+        auto aend             = (desired_err_pos + hwsize > input_sz) ? input_sz: desired_err_pos + hwsize;
+
+        err_pos               = aend == 0U ? desired_err_pos : hwsize;
+        std::string (begin + abegin, begin + aend).swap (input);
+      }
+      else
+      {
+        err_pos               = desired_err_pos;
+        std::string (begin, end).swap (input);
+      }
+
+      for (auto && ch : input)
+      {
+        if (satisfy_whitespace (0, ch))
+        {
+          ch = ' ';
+        }
+      }
       auto err_ch   = err_pos < input.size () ? input[err_pos] : ' ';
 
       // TODO: Handle multiline
 
-      std::string prelude   = "Parse failure: ";
       std::string indicator (prelude.size () + err_pos, ' ');
       indicator += '^';
 
@@ -231,7 +283,7 @@ namespace cpp_pc
         << "  Found '"
         << err_ch
         << "', position: "
-        << err_pos
+        << desired_err_pos
         ;
 
       detail::collect_error_visitor visitor;
@@ -295,7 +347,7 @@ namespace cpp_pc
           }
           else if (iter + 1 == sz && sz > 1)
           {
-            o << " and ";
+            o << " nor ";
           }
           else
           {
@@ -547,27 +599,6 @@ namespace cpp_pc
       }
     }
   }
-
-  auto satisfy_digit = [] (std::size_t, char ch)
-    {
-      return ch >= '0' && ch <= '9';
-    };
-
-  auto satisfy_whitespace = [] (std::size_t, char ch)
-    {
-      switch (ch)
-      {
-      case ' ':
-      case '\b':
-      case '\f':
-      case '\n':
-      case '\r':
-      case '\t':
-        return true;
-      default:
-        return false;
-      }
-    };
 
   // parser<'T> = state -> result<'T>
 
