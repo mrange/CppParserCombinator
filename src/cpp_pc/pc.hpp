@@ -473,17 +473,17 @@ namespace cpp_pc
     };
 
     template<typename TParser>
-    CPP_PC__PRELUDE auto operator > (TParser && parser) const
+    CPP_PC__PRELUDE auto operator > (TParser && t) const
     {
-      CPP_PC__CHECK_PARSER (parser);
-      return pleft (*this, std::forward<TParser> (parser));
+      CPP_PC__CHECK_PARSER (t);
+      return pleft (*this, std::forward<TParser> (t));
     };
 
     template<typename TParser>
-    CPP_PC__PRELUDE auto operator < (TParser && parser) const
+    CPP_PC__PRELUDE auto operator < (TParser && t) const
     {
-      CPP_PC__CHECK_PARSER (parser);
-      return pright (*this, std::forward<TParser> (parser));
+      CPP_PC__CHECK_PARSER (t);
+      return pright (*this, std::forward<TParser> (t));
     };
 
   };
@@ -998,15 +998,16 @@ namespace cpp_pc
   }
 
   template<typename TParser>
-  CPP_PC__INLINE auto pbreakpoint (TParser && parser)
+  CPP_PC__INLINE auto pbreakpoint (TParser && t)
   {
-    CPP_PC__CHECK_PARSER (parser);
+    CPP_PC__CHECK_PARSER (t);
 
     return detail::adapt_parser_function (
-      [parser = std::forward<TParser> (parser)] (state const & s, std::size_t position)
+      [t = std::forward<TParser> (t)] (state const & s, std::size_t position)
       {
-        CPP_PC__ASSERT ("pbreakpoint" && false);
-        return parser (s, position);
+//        CPP_PC__ASSERT ("pbreakpoint" && false);
+        auto tv = t (s, position);
+        return tv;
       });
   }
 
@@ -1030,9 +1031,12 @@ namespace cpp_pc
         CPP_PC__CHECK_PARSER (head);
       }
 
-      CPP_PC__PRELUDE result<TValue> parse (state const & s, std::size_t position) const
+      CPP_PC__INLINE result<TValue> parse (state const & s, std::size_t position, std::size_t & right_most) const
       {
-        return head (s, position);
+        auto hv = head (s, position);
+        right_most = std::max (hv.position, right_most);
+
+        return hv;
       }
 
       THead head;
@@ -1056,21 +1060,23 @@ namespace cpp_pc
         CPP_PC__CHECK_PARSER (head);
       }
 
-      CPP_PC__INLINE result<TValue> parse (state const & s, std::size_t position) const
+      CPP_PC__INLINE result<TValue> parse (state const & s, std::size_t position, std::size_t & right_most) const
       {
         auto hv = head (s, position);
+        right_most = std::max (hv.position, right_most);
+
         if (hv.value)
         {
           if (s.error_position == position)
           {
             // In order to collect error info
-            base_type::parse (s, position);
+            base_type::parse (s, position, right_most);
           }
           return hv;
         }
         else
         {
-          return base_type::parse (s, position);
+          return base_type::parse (s, position, right_most);
         }
       }
 
@@ -1093,7 +1099,16 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [impl = std::move (impl)] (state const & s, std::size_t position)
       {
-        return impl.parse (s, position);
+        std::size_t right_most = 0;
+        auto cv = impl.parse (s, position, right_most);
+
+        if (!cv.value)
+        {
+          // This is in order to report the error on the furthest position on the right
+          cv.reposition (right_most);
+        }
+
+        return cv;
       });
   }
 

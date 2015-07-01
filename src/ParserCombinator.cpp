@@ -989,7 +989,7 @@ namespace json
         o << prepend;
 
         // TODO: Add escaping
-        o << '"' << k << '"';
+        o << '"' << k << '"' << ':';
 
         if (v)
         {
@@ -1117,12 +1117,12 @@ namespace json
   {
     parray_trampoline->trampoline   = parray_.parser_function;
     pobject_trampoline->trampoline  = pobject_.parser_function;
-    return pskip_ws > pchoice (parray, pobject) > pskip_ws > peos;
+    return pskip_ws < pchoice (parray, pobject) > pskip_ws > peos;
   } ();
 
   void parse_and_print (const std::string & input)
   {
-    auto r = parse (pvalue > peos, input);
+    auto r = parse (pjson > peos, input);
     if (r.value)
     {
 
@@ -1144,15 +1144,15 @@ namespace json
 
   void test_json ()
   {
-    //parse_and_print (R"("Hello")");
-    //parse_and_print (R"("Hello\r\n\tThere")");
-    parse_and_print ("1.0g32");
-    parse_and_print ("-2");
+    parse_and_print ("[1.0g32]");
+    parse_and_print ("[2,1.0g32]");
+    parse_and_print ("2");
     parse_and_print ("[2.171828]");
     parse_and_print ("[]");
     parse_and_print ("[null]");
     parse_and_print ("{}");
-    parse_and_print ("{}");
+    parse_and_print ("{,}");
+    parse_and_print (R"({"x":3, "y":null})");
   };
 }
 // ----------------------------------------------------------------------------
