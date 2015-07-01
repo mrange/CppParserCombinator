@@ -390,7 +390,7 @@ namespace cpp_pc
   {
     using parser_function_type  = TParserFunction;
     using value_type            = TValue;
-    using result_type           = std::result_of_t<parser_function_type (state const &, std::size_t)>;
+    using result_type           = detail::strip_type_t<std::result_of_t<parser_function_type (state const &, std::size_t)>>;
 
     parser_function_type parser_function;
 
@@ -441,9 +441,9 @@ namespace cpp_pc
     template<typename TParserFunction>
     CPP_PC__PRELUDE auto adapt_parser_function (TParserFunction && parser_function)
     {
-      using parser_function_type  = strip_type_t<TParserFunction>                                       ;
-      using parser_result_type    = std::result_of_t<parser_function_type (state const &, std::size_t)> ;
-      using value_type            = typename parser_result_type::value_type                             ;
+      using parser_function_type  = strip_type_t<TParserFunction>                                                     ;
+      using parser_result_type    = strip_type_t<std::result_of_t<parser_function_type (state const &, std::size_t)>> ;
+      using value_type            = typename parser_result_type::value_type                                           ;
 
       return parser<value_type, parser_function_type> (std::forward<TParserFunction> (parser_function));
     }
@@ -577,7 +577,7 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [v = std::forward<TValue> (v)] (state const &, std::size_t position)
       {
-        using result_type = result<decltype (v)>;
+        using result_type = result<detail::strip_type_t<decltype (v)>>;
 
         return result_type::success (position, v);
       });
@@ -602,7 +602,7 @@ namespace cpp_pc
       {
         auto tv = t (s, position);
 
-        using result_type = decltype (fu (std::move (tv.value.get ())) (s, 0));
+        using result_type = detail::strip_type_t<decltype (fu (std::move (tv.value.get ())) (s, 0))>;
 
         if (tv.value)
         {
@@ -628,7 +628,7 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state const & s, std::size_t position)
       {
-        using result_type = decltype (t (s, 0))               ;
+        using result_type = detail::strip_type_t<decltype (t (s, 0))>;
 
         auto tv = t (s, position);
         if (tv.value)
@@ -661,7 +661,7 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state const & s, std::size_t position)
       {
-        using result_type = decltype (u (s, 0))               ;
+        using result_type = detail::strip_type_t<decltype (u (s, 0))>;
 
         auto tv = t (s, position);
         if (tv.value)
@@ -688,7 +688,7 @@ namespace cpp_pc
       {
         auto tv = t (s, position);
 
-        using mvalue_type = decltype (m (std::move (tv.value.get()))) ;
+        using mvalue_type = detail::strip_type_t<decltype (m (std::move (tv.value.get())))>;
         using result_type = result<mvalue_type>                       ;
 
         if (tv.value)
@@ -710,9 +710,9 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t)] (state const & s, std::size_t position)
       {
-        using tresult_type= decltype (t (s, 0))               ;
-        using tvalue_type = typename tresult_type::value_type ;
-        using result_type = result<opt<tvalue_type>>          ;
+        using tresult_type= detail::strip_type_t<decltype (t (s, 0))> ;
+        using tvalue_type = typename tresult_type::value_type         ;
+        using result_type = result<opt<tvalue_type>>                  ;
 
         auto tv = t (s, position);
 
@@ -735,9 +735,9 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [at_least, at_most, t = std::forward<TParser> (t)] (state const & s, std::size_t position)
       {
-        using tresult_type = decltype (t (s, 0))               ;
-        using tvalue_type  = typename tresult_type::value_type ;
-        using result_type  = result<std::vector<tvalue_type>>   ;
+        using tresult_type = detail::strip_type_t<decltype (t (s, 0))>  ;
+        using tvalue_type  = typename tresult_type::value_type          ;
+        using result_type  = result<std::vector<tvalue_type>>           ;
 
         std::vector<tvalue_type> values;
         values.reserve (at_least);
@@ -792,13 +792,13 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [at_least, at_most, allow_trailing_sep, t = std::forward<TParser> (t), sep_parser = std::forward<TSepParser> (sep_parser)] (state const & s, std::size_t position)
       {
-        using tresult_type = decltype (t (s, 0))               ;
-        using tvalue_type  = typename tresult_type::value_type ;
+        using tresult_type = detail::strip_type_t<decltype (t (s, 0))>          ;
+        using tvalue_type  = typename tresult_type::value_type                  ;
 
-        using sresult_type = decltype (sep_parser (s, 0))      ;
-        using svalue_type  = typename sresult_type::value_type ;
+        using sresult_type = detail::strip_type_t<decltype (sep_parser (s, 0))> ;
+        using svalue_type  = typename sresult_type::value_type                  ;
 
-        using result_type  = result<std::vector<tvalue_type>>  ;
+        using result_type  = result<std::vector<tvalue_type>>                   ;
 
         static_assert (
             std::is_same<unit_type, svalue_type>::value
@@ -879,9 +879,9 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [at_least, at_most, t = std::forward<TParser> (t)] (state const & s, std::size_t position)
       {
-        using tresult_type  = decltype (t (s, 0))               ;
-        using tvalue_type   = typename tresult_type::value_type ;
-        using result_type   = result<std::string>               ;
+        using tresult_type  = detail::strip_type_t<decltype (t (s, 0))> ;
+        using tvalue_type   = typename tresult_type::value_type         ;
+        using result_type   = result<std::string>                       ;
 
         static_assert (std::is_same<char, tvalue_type>::value, "Parser passed to pmany_chars must return value of type char");
 
