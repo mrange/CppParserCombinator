@@ -299,7 +299,7 @@ namespace test_parser
       auto p =
             preturn (3)
         ;
-      result<int> expected  = success (0, 3);
+      result<int> expected  = result<int>::success (0, 3);
       result<int> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -309,7 +309,7 @@ namespace test_parser
             preturn (3)
         >=  [] (int v) { return preturn (std::make_tuple (v, 4)); }
         ;
-      result<std::tuple<int,int>> expected  = success (0, std::make_tuple (3, 4));
+      result<std::tuple<int,int>> expected  = result<std::tuple<int,int>>::success (0, std::make_tuple (3, 4));
       result<std::tuple<int,int>> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -319,7 +319,7 @@ namespace test_parser
             psatisfy ("digits", 1U, 10U, satisfy_digit)
         >=  [] (auto && v) { return preturn (v.str ()); }
         ;
-      result<std::string> expected  = success (4, std::string ("1234"));
+      result<std::string> expected  = result<std::string>::success (4, std::string ("1234"));
       result<std::string> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -328,7 +328,7 @@ namespace test_parser
       auto p =
             pskip_char ('1')
         ;
-      result<unit_type> expected  = success (1, unit);
+      result<unit_type> expected  = result<unit_type>::success (1, unit);
       result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -337,7 +337,7 @@ namespace test_parser
       auto p =
             pskip_char ('2')
         ;
-      result<unit_type> expected  = failure<unit_type> (0);
+      result<unit_type> expected  = result<unit_type>::failure (0);
       result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -347,7 +347,7 @@ namespace test_parser
             pskip_char ('1')
         >   pskip_char ('2')
         ;
-      result<unit_type> expected  = success (2, unit);
+      result<unit_type> expected  = result<unit_type>::success (2, unit);
       result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -357,7 +357,7 @@ namespace test_parser
             pskip_char ('1')
         >   pskip_char ('1')
         ;
-      result<unit_type> expected  = failure<unit_type> (1);
+      result<unit_type> expected  = result<unit_type>::failure (1);
       result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -367,7 +367,7 @@ namespace test_parser
             pskip_char ('1')
         <   pskip_char ('2')
         ;
-      result<unit_type> expected  = success (2, unit);
+      result<unit_type> expected  = result<unit_type>::success (2, unit);
       result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -377,7 +377,7 @@ namespace test_parser
             pskip_char ('1')
         <   pskip_char ('1')
         ;
-      result<unit_type> expected  = failure<unit_type> (1);
+      result<unit_type> expected  = result<unit_type>::failure (1);
       result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -387,7 +387,7 @@ namespace test_parser
       auto p =
             pint
         ;
-      result<int> expected  = success (4, 1234);
+      result<int> expected  = result<int>::success (4, 1234);
       result<int> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -396,7 +396,7 @@ namespace test_parser
       auto p =
             pskip_ws
         ;
-      result<unit_type> expected  = success (0, unit);
+      result<unit_type> expected  = result<unit_type>::success (0, unit);
       result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -405,7 +405,7 @@ namespace test_parser
       auto p =
             pskip_string ("123")
         ;
-      result<unit_type> expected  = success (3, unit);
+      result<unit_type> expected  = result<unit_type>::success (3, unit);
       result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -414,7 +414,7 @@ namespace test_parser
       auto p =
             pskip_string ("124")
         ;
-      result<unit_type> expected  = failure<unit_type> (2);
+      result<unit_type> expected  = result<unit_type>::failure (2);
       result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -424,7 +424,7 @@ namespace test_parser
             pskip_string ("123")
         <   preturn (true)
         ;
-      result<bool> expected  = success (3, true);
+      result<bool> expected  = result<bool>::success (3, true);
       result<bool> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -434,7 +434,7 @@ namespace test_parser
             pskip_string ("124")
         <   preturn (true)
         ;
-      result<bool> expected  = failure<bool> (2);
+      result<bool> expected  = result<bool>::failure (2);
       result<bool> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -443,7 +443,7 @@ namespace test_parser
       auto p =
             pskip_char ('1')
         ;
-      result<unit_type> expected  = success (1, unit);
+      result<unit_type> expected  = result<unit_type>::success (1, unit);
       result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -452,7 +452,7 @@ namespace test_parser
       auto p =
             pskip_char ('2')
         ;
-      result<unit_type> expected  = failure<unit_type> (0);
+      result<unit_type> expected  = result<unit_type>::failure (0);
       result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -461,7 +461,7 @@ namespace test_parser
       auto p =
             pmany (1, 5, pany_of ("123"))
         ;
-      result<std::vector<char>> expected  = success (3, std::vector<char> ({'1','2','3'}));
+      result<std::vector<char>> expected  = result<std::vector<char>>::success (3, std::vector<char> ({'1','2','3'}));
       result<std::vector<char>> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -470,7 +470,7 @@ namespace test_parser
       auto p =
             pmany (1, 5, pany_of ("456"))
         ;
-      result<std::vector<char>> expected  = failure<std::vector<char>> (0);
+      result<std::vector<char>> expected  = result<std::vector<char>>::failure (0);
       result<std::vector<char>> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -479,7 +479,7 @@ namespace test_parser
       auto p =
             pmany (1, 2, pany_of ("123"))
         ;
-      result<std::vector<char>> expected  = success (2, std::vector<char> ({'1','2'}));
+      result<std::vector<char>> expected  = result<std::vector<char>>::success (2, std::vector<char> ({'1','2'}));
       result<std::vector<char>> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -488,7 +488,7 @@ namespace test_parser
       auto p =
             pmany (5, 5, pany_of ("123"))
         ;
-      result<std::vector<char>> expected  = failure<std::vector<char>> (0);
+      result<std::vector<char>> expected  = result<std::vector<char>>::failure (3);
       result<std::vector<char>> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -497,7 +497,7 @@ namespace test_parser
       auto p =
             ptuple (pskip_char ('1'), pskip_char ('2') < preturn (1))
         ;
-      result<std::tuple<unit_type, int>> expected = success (2, std::make_tuple (unit, 1));
+      result<std::tuple<unit_type, int>> expected = result<std::tuple<unit_type, int>>::success (2, std::make_tuple (unit, 1));
       result<std::tuple<unit_type, int>> actual   = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -506,7 +506,7 @@ namespace test_parser
       auto p =
             ptuple (pskip_char ('2'), pskip_char ('1') < preturn (1))
         ;
-      result<std::tuple<unit_type, int>> expected = failure<std::tuple<unit_type, int>> (0);
+      result<std::tuple<unit_type, int>> expected = result<std::tuple<unit_type, int>>::failure (0);
       result<std::tuple<unit_type, int>> actual   = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -515,7 +515,7 @@ namespace test_parser
       auto p =
             ptuple (pskip_char ('1'), pskip_char ('1') < preturn (1))
         ;
-      result<std::tuple<unit_type, int>> expected = failure<std::tuple<unit_type, int>> (1);
+      result<std::tuple<unit_type, int>> expected = result<std::tuple<unit_type, int>>::failure (1);
       result<std::tuple<unit_type, int>> actual   = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -524,7 +524,7 @@ namespace test_parser
       auto p =
             popt (pskip_char ('1'))
         ;
-      result<opt<unit_type>> expected  = success (1, make_opt (unit));
+      result<opt<unit_type>> expected  = result<opt<unit_type>>::success (1, make_opt (unit));
       result<opt<unit_type>> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -533,7 +533,7 @@ namespace test_parser
       auto p =
             popt (pskip_char ('2'))
         ;
-      result<opt<unit_type>> expected  = success (0, opt<unit_type> ());
+      result<opt<unit_type>> expected  = result<opt<unit_type>>::success (0, opt<unit_type> ());
       result<opt<unit_type>> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -546,7 +546,7 @@ namespace test_parser
         >   pskip_ws
         >=  [] (int v) { return pint >= [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
         ;
-      result<std::tuple<int,int>> expected  = success (11, std::make_tuple (1234, 5678));
+      result<std::tuple<int,int>> expected  = result<std::tuple<int,int>>::success (11, std::make_tuple (1234, 5678));
       result<std::tuple<int,int>> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -559,7 +559,7 @@ namespace test_parser
         >   pskip_ws
         >=  [] (int v) { return pint >= [v] (int u) { return preturn (std::make_tuple (v,u)); }; }
         ;
-      result<std::tuple<int,int>> expected  = failure<std::tuple<int,int>> (5);
+      result<std::tuple<int,int>> expected  = result<std::tuple<int,int>>::failure (5);
       result<std::tuple<int,int>> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
@@ -822,21 +822,197 @@ namespace json
     json_ast & operator = (json_ast const &)= delete ;
     json_ast & operator = (json_ast &&)     = delete ;
     virtual ~json_ast ()                    = default;
+
+    virtual void build_string (std::ostream & o) const = 0;
+  };
+
+  std::string to_string (json_ast::ptr json)
+  {
+    std::stringstream ss;
+
+    if (json)
+    {
+      json->build_string (ss);
+    }
+    else
+    {
+      ss << "null";
+    }
+
+    return ss.str ();
+  }
+
+  struct json_null : json_ast
+  {
+    json_null () = default;
+
+    void build_string (std::ostream & o) const override
+    {
+      o << "null";
+    }
+
+    static json_ast::ptr create ()
+    {
+      return std::make_shared<json_null> ();
+    }
   };
 
   struct json_boolean : json_ast
   {
-    bool value;
-  };
+    using value_type = bool;
 
-  struct null_type
-  {
-    constexpr null_type ()
+    json_boolean (value_type v)
+      : value (v)
     {
+    }
+
+    value_type const value;
+
+    void build_string (std::ostream & o) const override
+    {
+      o << (value ? "true" : "false");
+    }
+
+    static json_ast::ptr create (value_type v)
+    {
+      return std::make_shared<json_boolean> (v);
     }
   };
 
-  constexpr null_type null_value;
+  struct json_number : json_ast
+  {
+    using value_type = double;
+
+    json_number (value_type v)
+      : value (v)
+    {
+    }
+
+    value_type const value;
+
+    void build_string (std::ostream & o) const override
+    {
+      o << value;
+    }
+
+    static json_ast::ptr create (value_type v)
+    {
+      return std::make_shared<json_number> (v);
+    }
+  };
+
+  struct json_string : json_ast
+  {
+    using value_type = std::string;
+
+    json_string (value_type v)
+      : value (std::move (v))
+    {
+    }
+
+    value_type const value;
+
+    void build_string (std::ostream & o) const override
+    {
+      // TODO: Add escaping
+      o << '"' << value << '"';
+    }
+
+    static json_ast::ptr create (value_type v)
+    {
+      return std::make_shared<json_string> (std::move (v));
+    }
+  };
+
+  struct json_array : json_ast
+  {
+    using value_type = std::vector<json_ast::ptr>;
+
+    json_array (value_type v)
+      : value (std::move (v))
+    {
+    }
+
+    value_type const value;
+
+    void build_string (std::ostream & o) const override
+    {
+      auto prepend = "";
+      o << '[';
+
+      for (auto && v : value)
+      {
+        o << prepend;
+        if (v)
+        {
+          v->build_string (o);
+        }
+        else
+        {
+          o << "null";
+        }
+        prepend = ", ";
+      }
+
+      o << ']';
+    }
+
+    static json_ast::ptr create (value_type v)
+    {
+      return std::make_shared<json_array> (std::move (v));
+    }
+  };
+
+  struct json_object : json_ast
+  {
+    using value_type = std::vector<std::tuple<std::string, json_ast::ptr>>;
+
+    json_object (value_type v)
+      : value (std::move (v))
+    {
+    }
+
+    value_type const value;
+
+    void build_string (std::ostream & o) const override
+    {
+      auto prepend = "";
+      o << '{';
+
+      for (auto && kv : value)
+      {
+        auto & k = std::get<0> (kv);
+        auto & v = std::get<1> (kv);
+
+        o << prepend;
+
+        // TODO: Add escaping
+        o << '"' << k << '"';
+
+        if (v)
+        {
+          v->build_string (o);
+        }
+        else
+        {
+          o << "null";
+        }
+
+        prepend = ", ";
+      }
+
+      o << '}';
+    }
+
+    static json_ast::ptr create (value_type v)
+    {
+      return std::make_shared<json_object> (std::move (v));
+    }
+  };
+
+  auto json_null_value  = json_null::create ();
+  auto json_true_value  = json_boolean::create (true);
+  auto json_false_value = json_boolean::create (false);
 
   auto satisfy_char = [] (std::size_t, char ch)
     {
@@ -867,7 +1043,6 @@ namespace json
         return ch;
       };
     };
-
   auto map_number = [] (auto && v)
     {
       auto calculate_fraction = [] (auto && frac)
@@ -898,43 +1073,58 @@ namespace json
         ? calculate_exponent (oexp.get ())
         : 1.0
         ;
-      return sign * (i + frac) * exp;
+
+      auto result = sign * (i + frac) * exp;
+
+      return json_number::create (result);
     };
 
-  auto pchar    = psatisfy_char ("char", satisfy_char);
+  auto parray_trampoline  = create_trampoline<json_ast::ptr> ();
+  auto parray             = ptrampoline<json_ast::ptr> (parray_trampoline);
+
+  auto pobject_trampoline = create_trampoline<json_ast::ptr> ();
+  auto pobject            = ptrampoline<json_ast::ptr> (pobject_trampoline);
+
+  auto pnchar   = psatisfy_char ("char", satisfy_char);
   auto pescaped = pskip_char ('\\') < pmap (pany_of ("\"\\/bfnrt"), map_escaped);
-  auto pchars   = pmany (0, SIZE_MAX, pchoice (pchar, pescaped));
-  auto pstring  = pbetween (pskip_char ('"'), pchars, pskip_char ('"'));
+  auto pchar    = pchoice (pnchar, pescaped);
+  auto pchars   = pbetween (pskip_char ('"'), pmany_char (0, SIZE_MAX, pchar), pskip_char ('"'));
+  auto pstring  = pmap (pchars, json_string::create);
 
   auto pfrac    = popt (pskip_char ('.') < praw_uint64);
   auto psign    = popt (pany_of ("+-"));
   auto pexp     = popt (pany_of ("eE") < ptuple (psign, pint));
   auto pnumber  = pmap (ptuple (popt (pskip_char ('-')), pint64, pfrac, pexp), map_number);
 
-  auto ptrue    = pskip_string ("true")   < preturn (true);
+  auto ptrue    = pskip_string ("true")   < preturn (json_true_value);
 
-  auto pfalse   = pskip_string ("false")  < preturn (false);
+  auto pfalse   = pskip_string ("false")  < preturn (json_false_value);
 
-  auto pnull    = pskip_string ("null")   < preturn (null_value);
+  auto pnull    = pskip_string ("null")   < preturn (json_null_value);
 
-  auto pvalue   = pnull > pskip_ws;
-  auto pvalues  = pmany (0, SIZE_MAX, pvalue > pskip_char (',') > pskip_ws);
+  auto pvalue   = pchoice (pstring, pnumber, ptrue, pfalse, pnull, parray, pobject) > pskip_ws;
 
-  auto parray   = pbetween (pskip_char ('[') > pskip_ws, pvalues, pskip_char (']') > pskip_ws);
+  auto pvalues  = pmany_sepby (0, SIZE_MAX, false, pvalue, pskip_char (',') > pskip_ws);
+  auto parray_  = pmap (pbetween (pskip_char ('[') > pskip_ws, pvalues, pskip_char (']') > pskip_ws), json_array::create);
 
-  auto pmember  = ptuple (pstring > pskip_ws > pskip_char (':') > pskip_ws, pvalue);
-  auto pmembers = pmany (0, SIZE_MAX, pmember > pskip_char (',') > pskip_ws);
-  auto pobject  = pbetween (pskip_char ('{') > pskip_ws, pmembers, pskip_char ('}') > pskip_ws);
+  auto pmember  = ptuple (pchars > pskip_ws > pskip_char (':') > pskip_ws, pvalue);
+  auto pmembers = pmany_sepby (0, SIZE_MAX, false, pmember, pskip_char (',') > pskip_ws);
+  auto pobject_ = pmap (pbetween (pskip_char ('{') > pskip_ws, pmembers, pskip_char ('}') > pskip_ws), json_object::create);
 
-//  auto pjson    = pskip_ws > pchoice (parray, pobject) > peos;
+  auto pjson = [] ()
+  {
+    parray_trampoline->trampoline   = parray_.parser_function;
+    pobject_trampoline->trampoline  = pobject_.parser_function;
+    return pskip_ws > pchoice (parray, pobject) > pskip_ws > peos;
+  } ();
 
   void parse_and_print (const std::string & input)
   {
-    auto r = parse (pnumber > peos, input);
+    auto r = parse (pvalue > peos, input);
     if (r.value)
     {
 
-      double v = r.value.get ();
+      auto v = to_string (r.value.get ());
       //auto s = std::string (v.begin (), v.end ());
       std::cout
         << input
@@ -956,10 +1146,11 @@ namespace json
     //parse_and_print (R"("Hello\r\n\tThere")");
     parse_and_print ("1.0g32");
     parse_and_print ("-2");
-    parse_and_print ("2.171828");
-    parse_and_print ("1.32E3");
-    parse_and_print ("2e-2");
-    parse_and_print ("3.1415e10");
+    parse_and_print ("[2.171828]");
+    parse_and_print ("[]");
+    parse_and_print ("[null]");
+    parse_and_print ("{}");
+    parse_and_print ("{}");
   };
 }
 // ----------------------------------------------------------------------------

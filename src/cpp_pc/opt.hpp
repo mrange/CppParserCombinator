@@ -162,7 +162,7 @@ namespace cpp_pc
       }
     }
 
-    TValue const & coalesce (TValue const & v) const
+    TValue const & coalesce (TValue const & v) const noexcept
     {
       if (has_value)
       {
@@ -173,7 +173,6 @@ namespace cpp_pc
         return v;
       }
     }
-
 
   private:
 

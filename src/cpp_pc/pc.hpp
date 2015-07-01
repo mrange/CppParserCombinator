@@ -351,6 +351,21 @@ namespace cpp_pc
       return *this;
     }
 
+    CPP_PC__PRELUDE static auto success (std::size_t pos, T && v)
+    {
+      return result<T> (pos, std::move (v));
+    }
+
+    CPP_PC__PRELUDE static auto success (std::size_t pos, T const & v)
+    {
+      return result<T> (pos, v);
+    }
+
+    CPP_PC__PRELUDE static auto failure (std::size_t pos)
+    {
+      return result<T> (pos);
+    }
+
     std::size_t     position  ;
     opt<T>          value     ;
   };
@@ -480,18 +495,6 @@ namespace cpp_pc
 
   }
 
-  template<typename T>
-  CPP_PC__PRELUDE auto success (std::size_t end, T && v)
-  {
-    return result<detail::strip_type_t<T>> (end, std::forward<T> (v));
-  }
-
-  template<typename T>
-  CPP_PC__PRELUDE auto failure (std::size_t position)
-  {
-    return result<T> (position);
-  }
-
   template<typename TValueType, typename TParserFunction>
   CPP_PC__INLINE auto plain_parse (parser<TValueType, TParserFunction> const & p, std::string const & i)
   {
@@ -574,7 +577,9 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [v = std::forward<TValue> (v)] (state const &, std::size_t position)
       {
-        return success (position, v);
+        using result_type = result<decltype (v)>;
+
+        return result_type::success (position, v);
       });
   }
 
@@ -582,7 +587,9 @@ namespace cpp_pc
     detail::adapt_parser_function (
       [] (state const &, std::size_t position)
       {
-        return success (position, unit);
+        using result_type = result<unit_type>;
+
+        return result_type::success (position, unit);
       });
 
   template<typename TParser, typename TParserGenerator>
@@ -596,7 +603,6 @@ namespace cpp_pc
         auto tv = t (s, position);
 
         using result_type = decltype (fu (std::move (tv.value.get ())) (s, 0));
-        using value_type  = typename result_type::value_type                  ;
 
         if (tv.value)
         {
@@ -608,7 +614,7 @@ namespace cpp_pc
         }
         else
         {
-          return failure<value_type> (tv.position);
+          return result_type::failure (tv.position);
         }
       });
   }
@@ -623,7 +629,6 @@ namespace cpp_pc
       [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state const & s, std::size_t position)
       {
         using result_type = decltype (t (s, 0))               ;
-        using value_type  = typename result_type::value_type  ;
 
         auto tv = t (s, position);
         if (tv.value)
@@ -637,7 +642,7 @@ namespace cpp_pc
           }
           else
           {
-            return failure<value_type> (tu.position);
+            return result_type::failure (tu.position);
           }
         }
         else
@@ -657,7 +662,6 @@ namespace cpp_pc
       [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state const & s, std::size_t position)
       {
         using result_type = decltype (u (s, 0))               ;
-        using value_type  = typename result_type::value_type  ;
 
         auto tv = t (s, position);
         if (tv.value)
@@ -669,7 +673,7 @@ namespace cpp_pc
         }
         else
         {
-          return failure<value_type> (tv.position);
+          return result_type::failure (tv.position);
         }
       });
   }
@@ -684,15 +688,16 @@ namespace cpp_pc
       {
         auto tv = t (s, position);
 
-        using value_type  = decltype (m (std::move (tv.value.get()))) ;
+        using mvalue_type = decltype (m (std::move (tv.value.get()))) ;
+        using result_type = result<mvalue_type>                       ;
 
         if (tv.value)
         {
-          return success (tv.position, m (std::move (tv.value.get())));
+          return result_type::success (tv.position, m (std::move (tv.value.get())));
         }
         else
         {
-          return failure<value_type> (tv.position);
+          return result_type::failure (tv.position);
         }
       });
   }
@@ -705,18 +710,19 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t)] (state const & s, std::size_t position)
       {
-        using result_type = decltype (t (s, 0))               ;
-        using value_type  = typename result_type::value_type  ;
+        using tresult_type= decltype (t (s, 0))               ;
+        using tvalue_type = typename tresult_type::value_type ;
+        using result_type = result<opt<tvalue_type>>          ;
 
         auto tv = t (s, position);
 
         if (tv.value)
         {
-          return success<opt<value_type>> (tv.position, std::move (tv.value));
+          return result_type::success (tv.position, std::move (tv.value));
         }
         else
         {
-          return success<opt<value_type>> (tv.position, empty_opt);
+          return result_type::success (position, empty_opt);
         }
       });
   }
@@ -729,10 +735,11 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [at_least, at_most, t = std::forward<TParser> (t)] (state const & s, std::size_t position)
       {
-        using result_type = decltype (t (s, 0))               ;
-        using value_type  = typename result_type::value_type  ;
+        using tresult_type = decltype (t (s, 0))               ;
+        using tvalue_type  = typename tresult_type::value_type ;
+        using result_type  = result<std::vector<tvalue_type>>   ;
 
-        std::vector<value_type> values;
+        std::vector<tvalue_type> values;
         values.reserve (at_least);
 
         auto current = position;
@@ -761,11 +768,157 @@ namespace cpp_pc
 
         if (values.size () >= at_least)
         {
-          return success (current, std::move (values));
+          return result_type::success (current, std::move (values));
         }
         else
         {
-          return failure<std::vector<value_type>> (position);
+          return result_type::failure (current);
+        }
+      });
+  }
+
+  template<typename TParser, typename TSepParser>
+  CPP_PC__PRELUDE auto pmany_sepby (
+      std::size_t   at_least
+    , std::size_t   at_most
+    , bool          allow_trailing_sep
+    , TParser &&    t
+    , TSepParser && sep_parser
+    )
+  {
+    CPP_PC__CHECK_PARSER (t);
+    CPP_PC__CHECK_PARSER (sep_parser);
+
+    return detail::adapt_parser_function (
+      [at_least, at_most, allow_trailing_sep, t = std::forward<TParser> (t), sep_parser = std::forward<TSepParser> (sep_parser)] (state const & s, std::size_t position)
+      {
+        using tresult_type = decltype (t (s, 0))               ;
+        using tvalue_type  = typename tresult_type::value_type ;
+
+        using sresult_type = decltype (sep_parser (s, 0))      ;
+        using svalue_type  = typename sresult_type::value_type ;
+
+        using result_type  = result<std::vector<tvalue_type>>  ;
+
+        static_assert (
+            std::is_same<unit_type, svalue_type>::value
+          , "sep_parser must return result<unit_type>"
+          );
+
+        std::vector<tvalue_type> values;
+        values.reserve (at_least);
+
+        auto current = position;
+
+        {
+          auto tv = t (s, current);
+          if (!tv.value)
+          {
+            return result_type::success (current, std::move (values));
+          }
+
+          values.push_back (std::move (tv.value.get ()));
+
+          current = tv.position;
+        }
+
+        auto cont = true;
+
+        while (cont)
+        {
+          if (values.size () >= at_most)
+          {
+            cont = false;
+            continue;
+          }
+
+          auto sv = sep_parser (s, current);
+          if (!sv.value)
+          {
+            cont = false;
+            continue;
+          }
+
+          current = sv.position;
+
+          auto tv = t (s, current);
+          if (!tv.value)
+          {
+            if (allow_trailing_sep)
+            {
+              cont = false;
+              continue;
+            }
+            else
+            {
+              return result_type::failure (tv.position);
+            }
+          }
+
+          values.push_back (std::move (tv.value.get ()));
+
+          current = tv.position;
+        }
+
+        if (values.size () >= at_least)
+        {
+          return result_type::success (current, std::move (values));
+        }
+        else
+        {
+          return result_type::failure (current);
+        }
+      });
+  }
+
+  template<typename TParser>
+  CPP_PC__PRELUDE auto pmany_char (std::size_t at_least, std::size_t at_most, TParser && t)
+  {
+    CPP_PC__CHECK_PARSER (t);
+
+    return detail::adapt_parser_function (
+      [at_least, at_most, t = std::forward<TParser> (t)] (state const & s, std::size_t position)
+      {
+        using tresult_type  = decltype (t (s, 0))               ;
+        using tvalue_type   = typename tresult_type::value_type ;
+        using result_type   = result<std::string>               ;
+
+        static_assert (std::is_same<char, tvalue_type>::value, "Parser passed to pmany_chars must return value of type char");
+
+        std::string values;
+        values.reserve (at_least);
+
+        auto current = position;
+
+        auto cont = true;
+
+        while (cont)
+        {
+          if (values.size () >= at_most)
+          {
+            cont = false;
+            continue;
+          }
+
+          auto tv = t (s, current);
+          if (!tv.value)
+          {
+            cont = false;
+            continue;
+          }
+
+          values.push_back (std::move (tv.value.get ()));
+
+          current = tv.position;
+        }
+
+        if (values.size () >= at_least)
+        {
+          return result_type::success (current, std::move (values));
+        }
+        else
+        {
+          return result_type::failure (current);
         }
       });
   }
@@ -928,14 +1081,14 @@ namespace cpp_pc
       template<typename ...TTypes>
       CPP_PC__PRELUDE auto fail (std::size_t position) const
       {
-        return failure<std::tuple<TTypes...>> (position);
+        return result<std::tuple<TTypes...>>::failure (position);
       }
 
       template<typename ...TTypes>
       CPP_PC__PRELUDE auto parse (state const &, std::size_t position, TTypes const &... values) const
       {
         // TODO: Perfect forward
-        return success (position, std::tuple<TTypes...> (values...));
+        return result<std::tuple<TTypes...>>::success (position, std::tuple<TTypes...> (values...));
       }
 
     };
@@ -1011,12 +1164,13 @@ namespace cpp_pc
         , end_parser    = std::forward<TEndParser> (end_parser)
       ] (state const & s, std::size_t position)
       {
-        using value_type = detail::parser_value_type_t<TParser>;
+        using tvalue_type = detail::parser_value_type_t<TParser>;
+        using result_type = result<tvalue_type>                 ;
 
         auto bv = begin_parser (s, position);
         if (!bv.value)
         {
-          return failure<value_type> (bv.position);
+          return result_type::failure (bv.position);
         }
 
         auto v = parser (s, bv.position);
@@ -1028,7 +1182,7 @@ namespace cpp_pc
         auto ev = end_parser (s, v.position);
         if (!ev.value)
         {
-          return failure<value_type> (ev.position);
+          return result_type::failure (ev.position);
         }
 
         return v
@@ -1051,8 +1205,6 @@ namespace cpp_pc
         , combiner    = std::forward<TCombiner> (combiner)
       ] (state const & s, std::size_t position)
       {
-        using value_type = detail::parser_value_type_t<TParser>;
-
         auto v = parser (s, position);
 
         if (!v.value)
@@ -1093,6 +1245,8 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [error = detail::make_expected (std::move (expected)), at_least, at_most, satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
       {
+        using result_type = result<sub_string>  ;
+
         auto result = s.satisfy (position, at_most, satisfy_function);
         auto consumed = result.size ();
 
@@ -1100,10 +1254,10 @@ namespace cpp_pc
 
         if (consumed < at_least)
         {
-          return failure<sub_string> (position + consumed);
+          return result_type::failure (position + consumed);
         }
 
-        return success (position + consumed, std::move (result));
+        return result_type::success (position + consumed, std::move (result));
       });
   }
 
@@ -1113,22 +1267,24 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [error = detail::make_expected (std::move (expected)), satisfy_function = std::forward<TSatisfyFunction> (satisfy_function)] (state const & s, std::size_t position)
       {
+        using result_type = result<char>  ;
+
         s.append_error (position, error);
 
         auto peek = s.peek (position);
         if (peek == EOS)
         {
-          return failure<char> (position);
+          return result_type::failure (position);
         }
 
         auto result = static_cast<char> (peek);
 
         if (!satisfy_function (0, result))
         {
-          return failure<char> (position);
+          return result_type::failure (position);
         }
 
-        return success (position + 1, result);
+        return result_type::success (position + 1, result);
       });
   }
 
@@ -1157,6 +1313,8 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [expected = std::move (expected), errors = std::move (errors)] (state const & s, std::size_t position)
       {
+        using result_type = result<char>  ;
+
         if (position == s.error_position)
         {
           for (auto && error : errors)
@@ -1168,16 +1326,16 @@ namespace cpp_pc
         auto peek = s.peek (position);
         if (peek == EOS)
         {
-          return failure<char> (position);
+          return result_type::failure (position);
         }
 
         auto find = expected.find (static_cast<char> (peek));
         if (find == std::string::npos)
         {
-          return failure<char> (position);
+          return result_type::failure (position);
         }
 
-        return success (position + 1, static_cast<char> (peek));
+        return result_type::success (position + 1, static_cast<char> (peek));
       });
   }
 
@@ -1195,16 +1353,18 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [ch, error = detail::char_to_expected (ch)] (state const & s, std::size_t position)
       {
+        using result_type = result<unit_type> ;
+
         s.append_error (position, error);
 
         auto peek = s.peek (position);
         if (peek == ch)
         {
-          return success (position + 1, unit);
+          return result_type::success (position + 1, unit);
         }
         else
         {
-          return failure<unit_type> (position);
+          return result_type::failure (position);
         }
       });
   }
@@ -1233,16 +1393,18 @@ namespace cpp_pc
     detail::adapt_parser_function (
       [] (state const & s, std::size_t position)
       {
+        using result_type = result<unit_type> ;
+
         s.append_error (position, detail::peos_error);
 
         auto peek = s.peek (position);
         if (peek == EOS)
         {
-          return success (position, unit);
+          return result_type::success (position, unit);
         }
         else
         {
-          return failure<unit_type> (position);
+          return result_type::failure (position);
         }
       });
 
@@ -1256,6 +1418,8 @@ namespace cpp_pc
     detail::adapt_parser_function (
       [] (state const & s, std::size_t position)
       {
+        using result_type = result<std::tuple<std::uint64_t, std::size_t>>;
+
         auto ss = s.satisfy (position, 20U, satisfy_digit);
         auto consumed = ss.size ();
 
@@ -1263,7 +1427,7 @@ namespace cpp_pc
 
         if (consumed == 0)
         {
-          return failure<std::tuple<std::uint64_t, std::size_t>> (position + consumed);
+          return result_type::failure (position + consumed);
         }
 
         std::uint64_t i = 0;
@@ -1272,13 +1436,15 @@ namespace cpp_pc
           i = 10*i + static_cast<std::uint64_t> (*iter - '0');
         }
 
-        return success (position + consumed, std::make_tuple (i, consumed));
+        return result_type::success (position + consumed, std::make_tuple (i, consumed));
       });
 
   auto const pint64 =
     detail::adapt_parser_function (
       [] (state const & s, std::size_t position)
       {
+        using result_type = result<std::int64_t>;
+
         s.append_error (position, detail::pinteger_error);
 
         auto sign = 1         ;
@@ -1288,7 +1454,7 @@ namespace cpp_pc
         switch (peek)
         {
         case EOS:
-          return failure<std::int64_t> (position);
+          return result_type::failure (position);
         case '+':
           ++pos;
           break;
@@ -1306,7 +1472,7 @@ namespace cpp_pc
 
         if (consumed == 0)
         {
-          return failure<std::int64_t> (pos + consumed);
+          return result_type::failure (pos + consumed);
         }
 
         std::int64_t i = 0;
@@ -1317,7 +1483,7 @@ namespace cpp_pc
 
         i *= sign;
 
-        return success (pos + consumed, i);
+        return result_type::success (pos + consumed, i);
       });
 
   auto const puint64  = pmap (praw_uint64, [] (auto && v) { return std::get<0> (v); });
