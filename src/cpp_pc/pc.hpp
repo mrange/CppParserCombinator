@@ -51,7 +51,7 @@ namespace cpp_pc
       return std::string (begin, end);
     }
 
-    CPP_PC__PRELUDE std::size_t size () const
+    CPP_PC__INLINE std::size_t size () const
     {
       return static_cast<std::size_t> (end - begin);
     }
