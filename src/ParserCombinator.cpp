@@ -1147,6 +1147,14 @@ namespace json
 
   void test_json ()
   {
+    parse_and_print (R"(
+{
+  "x":3,
+  "y":[
+        "Hello there",
+        {"z":0.1g},
+      ]
+})");
     parse_and_print ("[1.0g32]");
     parse_and_print ("[2,1.0g32]");
     parse_and_print ("2");
@@ -1155,7 +1163,6 @@ namespace json
     parse_and_print ("[null]");
     parse_and_print ("{}");
     parse_and_print ("{,}");
-    parse_and_print (R"({"x":3, "y":null})");
   };
 }
 // ----------------------------------------------------------------------------
