@@ -63,10 +63,6 @@ A slightly more interesting example is a JSON parser:
 
 ```c++
 // JSON specification: http://json.org/
-auto json_null_value  = json_null::create ();
-auto json_true_value  = json_boolean::create (true);
-auto json_false_value = json_boolean::create (false);
-
 auto parray_trampoline  = create_trampoline<json_ast::ptr> ();
 auto parray             = ptrampoline<json_ast::ptr> (parray_trampoline);
 
