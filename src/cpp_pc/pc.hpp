@@ -808,6 +808,18 @@ namespace cpp_pc
       });
   }
 
+  template<typename TParser>
+  CPP_PC__PRELUDE auto pmany (TParser && t)
+  {
+    return pmany (0, SIZE_MAX, std::forward<TParser> (t));
+  }
+
+  template<typename TParser>
+  CPP_PC__PRELUDE auto pmany1 (TParser && t)
+  {
+    return pmany (1, SIZE_MAX, std::forward<TParser> (t));
+  }
+
   template<typename TParser, typename TSepParser>
   CPP_PC__PRELUDE auto pmany_sepby (
       std::size_t   at_least
@@ -902,6 +914,44 @@ namespace cpp_pc
       });
   }
 
+  template<typename TParser, typename TSepParser>
+  CPP_PC__PRELUDE auto pmany_sepby (
+      bool          allow_trailing_sep
+    , TParser &&    t
+    , TSepParser && sep_parser
+    )
+  {
+    return pmany_sepby (0, SIZE_MAX, allow_trailing_sep, std::forward<TParser> (t), std::forward<TSepParser> (sep_parser));
+  }
+
+  template<typename TParser, typename TSepParser>
+  CPP_PC__PRELUDE auto pmany_sepby1 (
+      bool          allow_trailing_sep
+    , TParser &&    t
+    , TSepParser && sep_parser
+    )
+  {
+    return pmany_sepby (1, SIZE_MAX, allow_trailing_sep, std::forward<TParser> (t), std::forward<TSepParser> (sep_parser));
+  }
+
+  template<typename TParser, typename TSepParser>
+  CPP_PC__PRELUDE auto pmany_sepby (
+      TParser &&    t
+    , TSepParser && sep_parser
+    )
+  {
+    return pmany_sepby (0, SIZE_MAX, false, std::forward<TParser> (t), std::forward<TSepParser> (sep_parser));
+  }
+
+  template<typename TParser, typename TSepParser>
+  CPP_PC__PRELUDE auto pmany_sepby1 (
+      TParser &&    t
+    , TSepParser && sep_parser
+    )
+  {
+    return pmany_sepby (1, SIZE_MAX, false, std::forward<TParser> (t), std::forward<TSepParser> (sep_parser));
+  }
+
   template<typename TParser>
   CPP_PC__PRELUDE auto pmany_char (std::size_t at_least, std::size_t at_most, TParser && t)
   {
@@ -952,6 +1002,18 @@ namespace cpp_pc
           return result_type::failure (current);
         }
       });
+  }
+
+  template<typename TParser>
+  CPP_PC__PRELUDE auto pmany_char (TParser && t)
+  {
+    return pmany_char (0, SIZE_MAX, std::forward<TParser> (t));
+  }
+
+  template<typename TParser>
+  CPP_PC__PRELUDE auto pmany_char1 (TParser && t)
+  {
+    return pmany_char (1, SIZE_MAX, std::forward<TParser> (t));
   }
 
   namespace detail
