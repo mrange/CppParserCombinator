@@ -367,10 +367,10 @@ namespace cpp_pc
     base_errors mutable errors        ;
   };
 
-  template<typename T>
+  template<typename TValue>
   struct result
   {
-    using value_type = T;
+    using value_type = detail::strip_type_t<TValue> ;
 
     CPP_PC__COPY_MOVE (result);
 
@@ -381,13 +381,13 @@ namespace cpp_pc
     {
     }
 
-    CPP_PC__PRELUDE explicit result (std::size_t position, T const & o)
+    CPP_PC__PRELUDE explicit result (std::size_t position, value_type const & o)
       : position  (position)
       , value     (o)
     {
     }
 
-    CPP_PC__PRELUDE explicit result (std::size_t position, T && o)
+    CPP_PC__PRELUDE explicit result (std::size_t position, value_type && o)
       : position  (position)
       , value     (std::move (o))
     {
@@ -407,23 +407,23 @@ namespace cpp_pc
       return *this;
     }
 
-    CPP_PC__PRELUDE static auto success (std::size_t pos, T && v)
+    CPP_PC__PRELUDE static auto success (std::size_t pos, value_type && v)
     {
-      return result<T> (pos, std::move (v));
+      return result<value_type> (pos, std::move (v));
     }
 
-    CPP_PC__PRELUDE static auto success (std::size_t pos, T const & v)
+    CPP_PC__PRELUDE static auto success (std::size_t pos, value_type const & v)
     {
-      return result<T> (pos, v);
+      return result<value_type> (pos, v);
     }
 
     CPP_PC__PRELUDE static auto failure (std::size_t pos)
     {
-      return result<T> (pos);
+      return result<value_type> (pos);
     }
 
     std::size_t     position  ;
-    opt<T>          value     ;
+    opt<value_type> value     ;
   };
 
   template<typename TParser, typename TParserGenerator>
@@ -445,7 +445,7 @@ namespace cpp_pc
   struct parser
   {
     using parser_function_type  = TParserFunction;
-    using value_type            = TValue;
+    using value_type            = detail::strip_type_t<TValue>;
     using result_type           = detail::strip_type_t<std::result_of_t<parser_function_type (state const &, std::size_t)>>;
 
     parser_function_type parser_function;
@@ -556,21 +556,23 @@ namespace cpp_pc
     return p.parser_function (s, 0);
   }
 
-  template<typename T>
+  template<typename TValue>
   struct parse_result
   {
+    using value_type = detail::strip_type_t<TValue> ;
+
     CPP_PC__COPY_MOVE (parse_result);
 
-    parse_result (std::size_t consumed, opt<T> value, std::string message)
+    parse_result (std::size_t consumed, opt<value_type> value, std::string message)
       : consumed(consumed)
       , value   (std::move (value))
       , message (std::move (message))
     {
     }
 
-    std::size_t consumed;
-    opt<T>      value   ;
-    std::string message ;
+    std::size_t     consumed;
+    opt<value_type> value   ;
+    std::string     message ;
   };
 
   template<typename TValueType, typename TParserFunction>
