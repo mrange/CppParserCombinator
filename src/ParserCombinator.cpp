@@ -729,38 +729,39 @@ namespace calculator
     }
   };
 
-  auto satisfy_identifier = [] (std::size_t pos, char ch)
-    {
-      return
-            (ch >= 'A' && ch <= 'Z'               )
-        ||  (ch >= 'a' && ch <= 'z'               )
-        ||  ((pos > 0) && ch >= '0' && ch <= '9'  )
-        ;
-    };
-  auto pidentifier_expr = pmap (psatisfy ("identifier", 1, SIZE_MAX, satisfy_identifier), identifier_expr::create);
-
-  auto pint_expr        = pmap (pint, int_expr::create);
-
-  auto pexpr_trampoline = create_trampoline<expr::ptr> ();
-  auto pexpr            = ptrampoline<expr::ptr> (pexpr_trampoline);
-  auto psub_expr        = pbetween (pskip_char ('(') > pskip_ws, pexpr, pskip_char (')'));
-
-  auto pvalue_expr      = pchoice (pint_expr, pidentifier_expr, psub_expr) > pskip_ws;
-
-  auto p0_op =
-        pany_of ("*/%")
-    >   pskip_ws
-    ;
-  auto pop0_expr        = psep (pvalue_expr , p0_op , binary_expr::create);
-
-  auto p1_op =
-        pany_of ("+-")
-    >   pskip_ws
-    ;
-  auto pop1_expr        = psep (pop0_expr   , p1_op , binary_expr::create);
-
   auto pcalculator_expr = [] ()
   {
+    auto satisfy_identifier = [] (std::size_t pos, char ch)
+      {
+        return
+              (ch >= 'A' && ch <= 'Z'               )
+          ||  (ch >= 'a' && ch <= 'z'               )
+          ||  ((pos > 0) && ch >= '0' && ch <= '9'  )
+          ;
+      };
+
+    auto pidentifier_expr = pmap (psatisfy ("identifier", 1, SIZE_MAX, satisfy_identifier), identifier_expr::create);
+
+    auto pint_expr        = pmap (pint, int_expr::create);
+
+    auto pexpr_trampoline = create_trampoline<expr::ptr> ();
+    auto pexpr            = ptrampoline<expr::ptr> (pexpr_trampoline);
+    auto psub_expr        = pbetween (pskip_char ('(') > pskip_ws, pexpr, pskip_char (')'));
+
+    auto pvalue_expr      = pchoice (pint_expr, pidentifier_expr, psub_expr) > pskip_ws;
+
+    auto p0_op =
+          pany_of ("*/%")
+      >   pskip_ws
+      ;
+    auto pop0_expr        = psep (pvalue_expr , p0_op , binary_expr::create);
+
+    auto p1_op =
+          pany_of ("+-")
+      >   pskip_ws
+      ;
+    auto pop1_expr        = psep (pop0_expr   , p1_op , binary_expr::create);
+
     pexpr_trampoline->trampoline = pop1_expr.parser_function;
     return pskip_ws < pexpr > peos;
   } ();
