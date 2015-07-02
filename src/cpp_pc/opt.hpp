@@ -35,7 +35,7 @@ namespace cpp_pc
   template<typename TValue>
   struct opt
   {
-    using value_type = TValue;
+    using value_type = detail::strip_type_t<TValue>;
 
     CPP_PC__INLINE opt () noexcept
       : has_value (false)
@@ -162,7 +162,7 @@ namespace cpp_pc
       }
     }
 
-    TValue const & coalesce (TValue const & v) const noexcept
+    value_type const & coalesce (value_type const & v) const noexcept
     {
       if (has_value)
       {
