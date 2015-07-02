@@ -33,7 +33,7 @@
 // ----------------------------------------------------------------------------
 namespace cpp_pc
 {
-  CPP_PC__PRELUDE int EOS = 0x70000001;
+  CPP_PC__PRELUDE int EOS = 0x70000000;
 
   struct sub_string
   {
