@@ -383,7 +383,13 @@ namespace cpp_pc
     {
     }
 
-    CPP_PC__PRELUDE explicit result (std::size_t position, T o)
+    CPP_PC__PRELUDE explicit result (std::size_t position, T const & o)
+      : position  (position)
+      , value     (o)
+    {
+    }
+
+    CPP_PC__PRELUDE explicit result (std::size_t position, T && o)
       : position  (position)
       , value     (std::move (o))
     {
