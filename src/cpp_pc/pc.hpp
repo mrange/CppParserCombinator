@@ -1192,7 +1192,7 @@ namespace cpp_pc
       CPP_PC__PRELUDE auto parse (state const &, std::size_t position, TTypes const & ...values) const
       {
         // TODO: Perfect forward
-        return result<std::tuple<TTypes...>>::success (position, std::tuple<TTypes...> (values...));
+        return result<decltype(std::make_tuple (values...))>::success (position, std::make_tuple (values...));
       }
 
     };
