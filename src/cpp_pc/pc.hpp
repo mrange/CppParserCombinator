@@ -270,8 +270,6 @@ namespace cpp_pc
       }
       auto err_ch   = err_pos < input.size () ? input[err_pos] : ' ';
 
-      // TODO: Handle multiline
-
       std::string indicator (prelude.size () + err_pos, ' ');
       indicator += '^';
 
@@ -1075,14 +1073,16 @@ namespace cpp_pc
     template<typename TValue, typename THead>
     struct pchoice_impl<TValue, THead>
     {
-      using value_type = detail::parser_value_type_t<THead>;
+      using head_type   = strip_type_t<THead>               ;
+      using value_type  = detail::parser_value_type_t<THead>;
 
       static_assert (std::is_same<TValue, value_type>::value, "All pchoice parsers must produce values of the same value_type");
 
       CPP_PC__CTOR_COPY_MOVE (pchoice_impl);
 
-      CPP_PC__PRELUDE pchoice_impl (THead const & head)
-        : head (head)
+      template<typename TH>
+      CPP_PC__PRELUDE pchoice_impl (TH && head)
+        : head (std::forward<TH> (head))
       {
         CPP_PC__CHECK_PARSER (head);
       }
@@ -1095,23 +1095,24 @@ namespace cpp_pc
         return hv;
       }
 
-      THead head;
+      head_type head;
     };
 
-    template<typename TValue, typename THead, typename... TTail>
+    template<typename TValue, typename THead, typename ...TTail>
     struct pchoice_impl<TValue, THead, TTail...> : pchoice_impl<TValue, TTail...>
     {
-      using base_type = pchoice_impl<TValue, TTail...>;
-      using value_type = detail::parser_value_type_t<THead>;
+      using base_type   = pchoice_impl<TValue, TTail...>    ;
+      using head_type   = strip_type_t<THead>               ;
+      using value_type  = detail::parser_value_type_t<THead>;
 
       static_assert (std::is_same<TValue, value_type>::value, "All pchoice parsers must produce values of the same value_type");
 
       CPP_PC__CTOR_COPY_MOVE (pchoice_impl);
 
-      // TODO: Perfect forward
-      CPP_PC__PRELUDE pchoice_impl (THead const & head, TTail const &... tail)
-        : base_type (tail...)
-        , head (head)
+      template<typename TH, typename ...TT>
+      CPP_PC__PRELUDE pchoice_impl (TH && head, TT && ...tail)
+        : base_type (std::forward<TT> (tail)...)
+        , head (std::forward<TH> (head))
       {
         CPP_PC__CHECK_PARSER (head);
       }
@@ -1136,7 +1137,7 @@ namespace cpp_pc
         }
       }
 
-      THead head;
+      head_type head;
     };
 
   }
@@ -1147,9 +1148,8 @@ namespace cpp_pc
     using value_type = detail::parser_value_type_t<TParser>;
 
     detail::pchoice_impl<value_type, TParser, TParsers...> impl (
-        // TODO: Perfect forward
-        parser
-      , parsers...
+        std::forward<TParser> (parser)
+      , std::forward<TParsers> (parsers)...
       );
 
     return detail::adapt_parser_function (
@@ -1187,7 +1187,7 @@ namespace cpp_pc
       }
 
       template<typename ...TTypes>
-      CPP_PC__PRELUDE auto parse (state const &, std::size_t position, TTypes const &... values) const
+      CPP_PC__PRELUDE auto parse (state const &, std::size_t position, TTypes const & ...values) const
       {
         // TODO: Perfect forward
         return result<std::tuple<TTypes...>>::success (position, std::tuple<TTypes...> (values...));
@@ -1195,18 +1195,19 @@ namespace cpp_pc
 
     };
 
-    template<typename THead, typename... TTail>
+    template<typename THead, typename ...TTail>
     struct ptuple_impl<THead, TTail...> : ptuple_impl<TTail...>
     {
-      using base_type   = ptuple_impl<TTail...>;
+      using head_type   = strip_type_t<THead>               ;
+      using base_type   = ptuple_impl<TTail...>             ;
       using value_type  = detail::parser_value_type_t<THead>;
 
       CPP_PC__CTOR_COPY_MOVE (ptuple_impl);
 
-      // TODO: Perfect forward
-      CPP_PC__PRELUDE ptuple_impl (THead const & head, TTail const &... tail)
-        : base_type (tail...)
-        , head (head)
+      template<typename TH, typename ...TT>
+      CPP_PC__PRELUDE ptuple_impl (TH && head, TT && ...tail)
+        : base_type (std::forward<TT> (tail)...)
+        , head (std::forward<TH> (head))
       {
         CPP_PC__CHECK_PARSER (head);
       }
@@ -1218,7 +1219,7 @@ namespace cpp_pc
       }
 
       template<typename ...TTypes>
-      CPP_PC__INLINE auto parse (state const & s, std::size_t position, TTypes const &... values) const
+      CPP_PC__INLINE auto parse (state const & s, std::size_t position, TTypes const & ...values) const
       {
         auto hv = head.parser_function (s, position);
         if (hv.value)
@@ -1232,7 +1233,7 @@ namespace cpp_pc
         }
       }
 
-      THead head;
+      head_type head;
     };
 
   }
@@ -1241,8 +1242,7 @@ namespace cpp_pc
   CPP_PC__INLINE auto ptuple (TParsers && ...parsers)
   {
     detail::ptuple_impl<TParsers...> impl (
-        // TODO: Perfect forward
-        parsers...
+        std::forward<TParsers> (parsers)...
       );
 
     return detail::adapt_parser_function (
@@ -1557,7 +1557,7 @@ namespace cpp_pc
         {
         case EOS:
         default:
-          if (peek == EOS || !satisfy_digit (0, peek))
+          if (peek == EOS || !satisfy_digit (0, static_cast<char> (peek)))
           {
             s.append_error (pos, detail::pplus_error);
             s.append_error (pos, detail::pminus_error);

@@ -293,7 +293,7 @@ namespace test_parser
 
   void test_parser ()
   {
-    std::string input = "1234 + 5678";
+    std::string const input = "1234 + 5678";
 
     {
       auto p =
@@ -311,6 +311,15 @@ namespace test_parser
         ;
       result<std::tuple<int,int>> expected  = result<std::tuple<int,int>>::success (0, std::make_tuple (3, 4));
       result<std::tuple<int,int>> actual    = plain_parse (p, input);
+      TEST_EQ (expected, actual);
+    }
+
+    {
+      auto p =
+            preturn (3) < punit
+        ;
+      result<unit_type> expected  = result<unit_type>::success (0, unit);
+      result<unit_type> actual    = plain_parse (p, input);
       TEST_EQ (expected, actual);
     }
 
@@ -565,10 +574,9 @@ namespace test_parser
     }
 
     // TODO:
-    // punit
+    // pbreakpoint
     // pchoice
     // ptrampoline
-    // pbreakpoint
     // pbetween
     // psep
     // peos
@@ -1163,12 +1171,20 @@ namespace json
 // ----------------------------------------------------------------------------
 int main()
 {
-  std::cout << "Running tests..." << std::endl;
+  std::cout << "Running unit tests..." << std::endl;
   test_parser::test_opt<std::string> ("1234", "5678");
   test_parser::test_opt<int> (1,3);
   test_parser::test_parser ();
+  std::cout << "Unit tests complete" << std::endl;
+
+  std::cout << "Running json tests..." << std::endl;
   json::test_json ();
+
+  std::cout << "Running calculator tests..." << std::endl;
   calculator::test_calculator ();
+
+  std::make_tuple(1,2);
+
   std::cout << "Done!" << std::endl;
   return 0;
 }

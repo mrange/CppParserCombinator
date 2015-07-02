@@ -46,7 +46,7 @@ namespace cpp_pc
   namespace detail
   {
     template<typename T>
-    using strip_type_t = std::remove_cv_t<std::remove_reference_t<T>>;
+    using strip_type_t = std::decay_t<T>;
   }
 
   struct unit_type
