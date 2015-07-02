@@ -467,11 +467,6 @@ namespace cpp_pc
     {
     }
 
-    CPP_PC__PRELUDE result<value_type> operator () (state const & s, std::size_t position) const
-    {
-      return parser_function (s, position);
-    }
-
     template<typename TBindFunction>
     CPP_PC__PRELUDE auto operator >= (TBindFunction && bind_function) const
     {
@@ -560,7 +555,7 @@ namespace cpp_pc
     auto end    = begin + i.size ();
 
     state s (SIZE_MAX, begin, end);
-    return p (s, 0);
+    return p.parser_function (s, 0);
   }
 
   template<typename T>
@@ -588,7 +583,7 @@ namespace cpp_pc
 
     {
       state s (SIZE_MAX, begin, end);
-      auto v = p (s, 0);
+      auto v = p.parser_function (s, 0);
       if (v.value)
       {
         return parse_result<TValueType> (v.position, std::move (v.value), std::string ());
@@ -596,7 +591,7 @@ namespace cpp_pc
       else
       {
         state es (v.position, begin, end);
-        auto ev = p (es, 0);
+        auto ev = p.parser_function (es, 0);
 
         CPP_PC__ASSERT (v.position == ev.position);
         CPP_PC__ASSERT (!ev.value);
@@ -637,13 +632,13 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t), fu = std::forward<TParserGenerator> (fu)] (state const & s, std::size_t position)
       {
-        auto tv = t (s, position);
+        auto tv = t.parser_function (s, position);
 
-        using result_type = detail::strip_type_t<decltype (fu (std::move (tv.value.get ())) (s, 0))>;
+        using result_type = detail::strip_type_t<decltype (fu (std::move (tv.value.get ())).parser_function (s, 0))>;
 
         if (tv.value)
         {
-          return fu (std::move (tv.value.get ())) (s, tv.position);
+          return fu (std::move (tv.value.get ())).parser_function (s, tv.position);
         }
         else
         {
@@ -661,12 +656,12 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state const & s, std::size_t position)
       {
-        using result_type = detail::strip_type_t<decltype (t (s, 0))>;
+        using result_type = detail::strip_type_t<decltype (t.parser_function (s, 0))>;
 
-        auto tv = t (s, position);
+        auto tv = t.parser_function (s, position);
         if (tv.value)
         {
-          auto uv = u (s, tv.position);
+          auto uv = u.parser_function (s, tv.position);
           if (uv.value)
           {
             return tv
@@ -694,12 +689,12 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t), u = std::forward<TOtherParser> (u)] (state const & s, std::size_t position)
       {
-        using result_type = detail::strip_type_t<decltype (u (s, 0))>;
+        using result_type = detail::strip_type_t<decltype (u.parser_function (s, 0))>;
 
-        auto tv = t (s, position);
+        auto tv = t.parser_function (s, position);
         if (tv.value)
         {
-          return u (s, tv.position);
+          return u.parser_function (s, tv.position);
         }
         else
         {
@@ -716,7 +711,7 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t), m = std::forward<TMapper> (m)] (state const & s, std::size_t position)
       {
-        auto tv = t (s, position);
+        auto tv = t.parser_function (s, position);
 
         using mvalue_type = detail::strip_type_t<decltype (m (std::move (tv.value.get())))>;
         using result_type = result<mvalue_type>                       ;
@@ -740,11 +735,11 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [t = std::forward<TParser> (t)] (state const & s, std::size_t position)
       {
-        using tresult_type= detail::strip_type_t<decltype (t (s, 0))> ;
-        using tvalue_type = typename tresult_type::value_type         ;
-        using result_type = result<opt<tvalue_type>>                  ;
+        using tresult_type= detail::strip_type_t<decltype (t.parser_function (s, 0))> ;
+        using tvalue_type = typename tresult_type::value_type                         ;
+        using result_type = result<opt<tvalue_type>>                                  ;
 
-        auto tv = t (s, position);
+        auto tv = t.parser_function (s, position);
 
         if (tv.value)
         {
@@ -765,9 +760,9 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [at_least, at_most, t = std::forward<TParser> (t)] (state const & s, std::size_t position)
       {
-        using tresult_type = detail::strip_type_t<decltype (t (s, 0))>  ;
-        using tvalue_type  = typename tresult_type::value_type          ;
-        using result_type  = result<std::vector<tvalue_type>>           ;
+        using tresult_type = detail::strip_type_t<decltype (t.parser_function (s, 0))>;
+        using tvalue_type  = typename tresult_type::value_type                        ;
+        using result_type  = result<std::vector<tvalue_type>>                         ;
 
         std::vector<tvalue_type> values;
         values.reserve (at_least);
@@ -784,7 +779,7 @@ namespace cpp_pc
             continue;
           }
 
-          auto tv = t (s, current);
+          auto tv = t.parser_function (s, current);
           if (!tv.value)
           {
             cont = false;
@@ -834,13 +829,13 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [at_least, at_most, allow_trailing_sep, t = std::forward<TParser> (t), sep_parser = std::forward<TSepParser> (sep_parser)] (state const & s, std::size_t position)
       {
-        using tresult_type = detail::strip_type_t<decltype (t (s, 0))>          ;
-        using tvalue_type  = typename tresult_type::value_type                  ;
+        using tresult_type = detail::strip_type_t<decltype (t.parser_function (s, 0))>          ;
+        using tvalue_type  = typename tresult_type::value_type                                  ;
 
-        using sresult_type = detail::strip_type_t<decltype (sep_parser (s, 0))> ;
-        using svalue_type  = typename sresult_type::value_type                  ;
+        using sresult_type = detail::strip_type_t<decltype (sep_parser.parser_function (s, 0))> ;
+        using svalue_type  = typename sresult_type::value_type                                  ;
 
-        using result_type  = result<std::vector<tvalue_type>>                   ;
+        using result_type  = result<std::vector<tvalue_type>>                                   ;
 
         static_assert (
             std::is_same<unit_type, svalue_type>::value
@@ -853,7 +848,7 @@ namespace cpp_pc
         auto current = position;
 
         {
-          auto tv = t (s, current);
+          auto tv = t.parser_function (s, current);
           if (!tv.value)
           {
             return result_type::success (current, std::move (values));
@@ -874,7 +869,7 @@ namespace cpp_pc
             continue;
           }
 
-          auto sv = sep_parser (s, current);
+          auto sv = sep_parser.parser_function (s, current);
           if (!sv.value)
           {
             cont = false;
@@ -883,7 +878,7 @@ namespace cpp_pc
 
           current = sv.position;
 
-          auto tv = t (s, current);
+          auto tv = t.parser_function (s, current);
           if (!tv.value)
           {
             if (allow_trailing_sep)
@@ -959,9 +954,9 @@ namespace cpp_pc
     return detail::adapt_parser_function (
       [at_least, at_most, t = std::forward<TParser> (t)] (state const & s, std::size_t position)
       {
-        using tresult_type  = detail::strip_type_t<decltype (t (s, 0))> ;
-        using tvalue_type   = typename tresult_type::value_type         ;
-        using result_type   = result<std::string>                       ;
+        using tresult_type  = detail::strip_type_t<decltype (t.parser_function (s, 0))> ;
+        using tvalue_type   = typename tresult_type::value_type                         ;
+        using result_type   = result<std::string>                                       ;
 
         static_assert (std::is_same<char, tvalue_type>::value, "Parser passed to pmany_chars must return value of type char");
 
@@ -980,7 +975,7 @@ namespace cpp_pc
             continue;
           }
 
-          auto tv = t (s, current);
+          auto tv = t.parser_function (s, current);
           if (!tv.value)
           {
             cont = false;
@@ -1094,7 +1089,7 @@ namespace cpp_pc
 
       CPP_PC__INLINE result<TValue> parse (state const & s, std::size_t position, std::size_t & right_most) const
       {
-        auto hv = head (s, position);
+        auto hv = head.parser_function (s, position);
         right_most = std::max (hv.position, right_most);
 
         return hv;
@@ -1123,7 +1118,7 @@ namespace cpp_pc
 
       CPP_PC__INLINE result<TValue> parse (state const & s, std::size_t position, std::size_t & right_most) const
       {
-        auto hv = head (s, position);
+        auto hv = head.parser_function (s, position);
         right_most = std::max (hv.position, right_most);
 
         if (hv.value)
@@ -1225,7 +1220,7 @@ namespace cpp_pc
       template<typename ...TTypes>
       CPP_PC__INLINE auto parse (state const & s, std::size_t position, TTypes const &... values) const
       {
-        auto hv = head (s, position);
+        auto hv = head.parser_function (s, position);
         if (hv.value)
         {
           // TODO: Perfect forward
@@ -1274,19 +1269,19 @@ namespace cpp_pc
         using tvalue_type = detail::parser_value_type_t<TParser>;
         using result_type = result<tvalue_type>                 ;
 
-        auto bv = begin_parser (s, position);
+        auto bv = begin_parser.parser_function (s, position);
         if (!bv.value)
         {
           return result_type::failure (bv.position);
         }
 
-        auto v = parser (s, bv.position);
+        auto v = parser.parser_function (s, bv.position);
         if (!v.value)
         {
           return v;
         }
 
-        auto ev = end_parser (s, v.position);
+        auto ev = end_parser.parser_function (s, v.position);
         if (!ev.value)
         {
           return result_type::failure (ev.position);
@@ -1312,7 +1307,7 @@ namespace cpp_pc
         , combiner    = std::forward<TCombiner> (combiner)
       ] (state const & s, std::size_t position)
       {
-        auto v = parser (s, position);
+        auto v = parser.parser_function (s, position);
 
         if (!v.value)
         {
@@ -1323,14 +1318,14 @@ namespace cpp_pc
 
         while (cont)
         {
-          auto sv = sep_parser (s, v.position);
+          auto sv = sep_parser.parser_function (s, v.position);
           if (!sv.value)
           {
             cont = false;
             continue;
           }
 
-          auto ov = parser (s, sv.position);
+          auto ov = parser.parser_function (s, sv.position);
           if (!ov.value)
           {
             return ov
