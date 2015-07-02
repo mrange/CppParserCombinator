@@ -1513,7 +1513,8 @@ namespace cpp_pc
   namespace detail
   {
     auto const pdigit_error   = detail::make_expected ("digit");
-    auto const pinteger_error = detail::make_expected ("integer");
+    auto const pplus_error    = detail::make_expected ("'+'");
+    auto const pminus_error   = detail::make_expected ("'-'");
   }
 
   auto const praw_uint64 =
@@ -1547,16 +1548,23 @@ namespace cpp_pc
       {
         using result_type = result<std::int64_t>;
 
-        s.append_error (position, detail::pinteger_error);
 
-        auto sign = 1         ;
-        auto pos  = position  ;
+        auto sign = 1       ;
+        auto pos  = position;
 
         auto peek = s.peek (pos) ;
         switch (peek)
         {
         case EOS:
-          return result_type::failure (position);
+        default:
+          if (peek == EOS || !satisfy_digit (0, peek))
+          {
+            s.append_error (pos, detail::pplus_error);
+            s.append_error (pos, detail::pminus_error);
+            s.append_error (pos, detail::pdigit_error);
+            return result_type::failure (pos);
+          }
+          break;
         case '+':
           ++pos;
           break;
@@ -1564,13 +1572,13 @@ namespace cpp_pc
           sign = -1;
           ++pos;
           break;
-        default:
-
-          break;
         }
 
         auto ss = s.satisfy (pos, 20U, satisfy_digit);
         auto consumed = ss.size ();
+
+
+        s.append_error (pos + consumed, detail::pdigit_error);
 
         if (consumed == 0)
         {
