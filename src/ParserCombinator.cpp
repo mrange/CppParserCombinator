@@ -731,7 +731,7 @@ namespace calculator
     }
   };
 
-  auto pcalculator_expr = [] ()
+  auto const pcalculator_expr = [] ()
   {
     auto satisfy_identifier = [] (std::size_t pos, char ch)
       {
@@ -1127,36 +1127,38 @@ namespace json
     }
   };
 
-  auto satisfy_char = [] (std::size_t, char ch)
+  constexpr auto satisfy_char (std::size_t, char ch)
+  {
+    return ch != '"' && ch != '\\';
+  }
+
+  inline auto map_escaped (char ch)
+  {
+    switch (ch)
     {
-      return ch != '"' && ch != '\\';
+    case '"':
+      return '"';
+    case '\\':
+      return '\\';
+    case '/':
+      return '/';
+    case 'b':
+      return '\b';
+    case 'f':
+      return '\f';
+    case 'n':
+      return '\n';
+    case 'r':
+      return '\r';
+    case 't':
+      return '\t';
+    default:
+      CPP_PC__ASSERT (false);
+      return ch;
     };
-  auto map_escaped = [] (char ch)
-    {
-      switch (ch)
-      {
-      case '"':
-        return '"';
-      case '\\':
-        return '\\';
-      case '/':
-        return '/';
-      case 'b':
-        return '\b';
-      case 'f':
-        return '\f';
-      case 'n':
-        return '\n';
-      case 'r':
-        return '\r';
-      case 't':
-        return '\t';
-      default:
-        CPP_PC__ASSERT (false);
-        return ch;
-      };
-    };
-  auto map_number = [] (auto && v)
+  }
+
+  auto const map_number = [] (auto && v)
     {
       auto calculate_fraction = [] (auto && frac)
         {
@@ -1192,47 +1194,47 @@ namespace json
       return json_number::create (result);
     };
 
-  auto json_null_value  = json_null::create ();
-  auto json_true_value  = json_boolean::create (true);
-  auto json_false_value = json_boolean::create (false);
+  auto const json_null_value  = json_null::create ();
+  auto const json_true_value  = json_boolean::create (true);
+  auto const json_false_value = json_boolean::create (false);
 
-  // JSON specification: http://json.org/
-  auto parray_trampoline  = create_trampoline<json_ast::ptr> ();
-  auto parray             = ptrampoline<json_ast::ptr> (parray_trampoline);
-
-  auto pobject_trampoline = create_trampoline<json_ast::ptr> ();
-  auto pobject            = ptrampoline<json_ast::ptr> (pobject_trampoline);
-
-  auto pnchar   = psatisfy_char ("char", satisfy_char);
-  auto pescaped = pskip_char ('\\') < pmap (pany_of ("\"\\/bfnrt"), map_escaped);
-  // TODO: Handle unicode escaping (\u)
-  auto pchar    = pchoice (pnchar, pescaped);
-  auto pchars   = pbetween (pskip_char ('"'), pmany_char (pchar), pskip_char ('"'));
-  auto pstring  = pmap (pchars, json_string::create);
-
-  auto pfrac    = popt (pskip_char ('.') < praw_uint64);
-  auto psign    = popt (pany_of ("+-"));
-  auto pexp     = popt (pany_of ("eE") < ptuple (psign, pint));
-  // TODO: Handle that 0123 is not allowed
-  auto pnumber  = pmap (ptuple (popt (pskip_char ('-')), puint64, pfrac, pexp), map_number);
-
-  auto ptrue    = pskip_string ("true")   < preturn (json_true_value);
-
-  auto pfalse   = pskip_string ("false")  < preturn (json_false_value);
-
-  auto pnull    = pskip_string ("null")   < preturn (json_null_value);
-
-  auto pvalue   = pchoice (pstring, pnumber, ptrue, pfalse, pnull, parray, pobject) > pskip_ws;
-
-  auto pvalues  = pmany_sepby (pvalue, pskip_char (',') > pskip_ws);
-  auto parray_  = pmap (pbetween (pskip_char ('[') > pskip_ws, pvalues, pskip_char (']') > pskip_ws), json_array::create);
-
-  auto pmember  = ptuple (pchars > pskip_ws > pskip_char (':') > pskip_ws, pvalue);
-  auto pmembers = pmany_sepby (pmember, pskip_char (',') > pskip_ws);
-  auto pobject_ = pmap (pbetween (pskip_char ('{') > pskip_ws, pmembers, pskip_char ('}') > pskip_ws), json_object::create);
-
-  auto pjson = [] ()
+  auto const pjson = [] ()
   {
+    // JSON specification: http://json.org/
+    auto parray_trampoline  = create_trampoline<json_ast::ptr> ();
+    auto parray             = ptrampoline<json_ast::ptr> (parray_trampoline);
+
+    auto pobject_trampoline = create_trampoline<json_ast::ptr> ();
+    auto pobject            = ptrampoline<json_ast::ptr> (pobject_trampoline);
+
+    auto pnchar   = psatisfy_char ("char", satisfy_char);
+    auto pescaped = pskip_char ('\\') < pmap (pany_of ("\"\\/bfnrt"), map_escaped);
+    // TODO: Handle unicode escaping (\u)
+    auto pchar    = pchoice (pnchar, pescaped);
+    auto pchars   = pbetween (pskip_char ('"'), pmany_char (pchar), pskip_char ('"'));
+    auto pstring  = pmap (pchars, json_string::create);
+
+    auto pfrac    = popt (pskip_char ('.') < praw_uint64);
+    auto psign    = popt (pany_of ("+-"));
+    auto pexp     = popt (pany_of ("eE") < ptuple (psign, pint));
+    // TODO: Handle that 0123 is not allowed
+    auto pnumber  = pmap (ptuple (popt (pskip_char ('-')), puint64, pfrac, pexp), map_number);
+
+    auto ptrue    = pskip_string ("true")   < preturn (json_true_value);
+
+    auto pfalse   = pskip_string ("false")  < preturn (json_false_value);
+
+    auto pnull    = pskip_string ("null")   < preturn (json_null_value);
+
+    auto pvalue   = pchoice (pstring, pnumber, ptrue, pfalse, pnull, parray, pobject) > pskip_ws;
+
+    auto pvalues  = pmany_sepby (pvalue, pskip_char (',') > pskip_ws);
+    auto parray_  = pmap (pbetween (pskip_char ('[') > pskip_ws, pvalues, pskip_char (']') > pskip_ws), json_array::create);
+
+    auto pmember  = ptuple (pchars > pskip_ws > pskip_char (':') > pskip_ws, pvalue);
+    auto pmembers = pmany_sepby (pmember, pskip_char (',') > pskip_ws);
+    auto pobject_ = pmap (pbetween (pskip_char ('{') > pskip_ws, pmembers, pskip_char ('}') > pskip_ws), json_object::create);
+
     parray_trampoline->trampoline   = parray_.parser_function;
     pobject_trampoline->trampoline  = pobject_.parser_function;
     return pskip_ws < pchoice (parray, pobject) > pskip_ws > peos;
@@ -1354,7 +1356,7 @@ namespace json
   {
     std::mt19937 random (19740531);
 
-    auto random_testcases = 100;
+    auto random_testcases = 1000;
 
     std::cout << "Running " << random_testcases << " JSON testcases..." << std::endl;
 
