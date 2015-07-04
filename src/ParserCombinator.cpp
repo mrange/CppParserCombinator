@@ -15,9 +15,11 @@
 // ----------------------------------------------------------------------------
 #include "stdafx.h"
 // ----------------------------------------------------------------------------
+#include <algorithm>
 #include <iostream>
 #include <map>
 #include <memory>
+#include <random>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -802,11 +804,14 @@ namespace calculator
     {
       std::cout << "  " << kv.first << " = " << kv.second << std::endl;
     }
+
+    /*
     parse_and_print ("1234");
     parse_and_print ("abc");
     parse_and_print ("(0 + 3) * x + 4*y - 1");
     parse_and_print ("1+2+3+4+5+6+7+8+9+0+1+2+3+4+5+6+7+8+9+0+1+2+3+4+5+6+7+8+9+1+2+3+4+5+6+7+8+9+0+1+2+3+4+5+6+7+8+9+0+1+2+3+4+5+6+7+8+9+1+2+3+4+5+6+7+8+9+0+1+2+3+4+5+\r\n6+7+8+9+0+1+2+3+4+5+6+7+8+9");
     parse_and_print ("1+2+3+4+5+6+7+8+9+0+1+2+3+4+5+6+7+8+9+0+1+2+3+4+5+6+7+8+9+1+2+3+4+5+6+7+8+9+0+1+2+3+4+5+6+7+8+9+0+1+2+3+4+5+6+7+8+9+1+2+3+4+5+6+7+8+9+0+1+2+3+4+5+\r\n6+7+8+9+0+)1+2+3+4+5+6+7+8");
+    */
 
     std::string line;
     while (std::cout << "Input expression (blank to exit)" << std::endl, std::getline (std::cin, line) && !line.empty ())
@@ -835,9 +840,10 @@ namespace json
     virtual ~json_ast ()                    = default;
 
     virtual void build_string (std::ostream & o) const = 0;
+    virtual bool is_equal_to (json_ast::ptr const & o) const = 0;
   };
 
-  std::string to_string (json_ast::ptr json)
+  std::string to_string (json_ast::ptr const & json)
   {
     std::stringstream ss;
 
@@ -847,7 +853,7 @@ namespace json
     }
     else
     {
-      ss << "null";
+      ss << "[]";
     }
 
     return ss.str ();
@@ -860,6 +866,13 @@ namespace json
     void build_string (std::ostream & o) const override
     {
       o << "null";
+    }
+
+    bool is_equal_to (json_ast::ptr const & o) const override
+    {
+      auto other = std::dynamic_pointer_cast<json_null> (o);
+
+      return !!other;
     }
 
     static json_ast::ptr create ()
@@ -884,6 +897,17 @@ namespace json
       o << (value ? "true" : "false");
     }
 
+    bool is_equal_to (json_ast::ptr const & o) const override
+    {
+      auto other = std::dynamic_pointer_cast<json_boolean> (o);
+      if (!other)
+      {
+        return false;
+      }
+
+      return value == other->value;
+    }
+
     static json_ast::ptr create (value_type v)
     {
       return std::make_shared<json_boolean> (v);
@@ -904,6 +928,17 @@ namespace json
     void build_string (std::ostream & o) const override
     {
       o << value;
+    }
+
+    bool is_equal_to (json_ast::ptr const & o) const override
+    {
+      auto other = std::dynamic_pointer_cast<json_number> (o);
+      if (!other)
+      {
+        return false;
+      }
+
+      return value == other->value;
     }
 
     static json_ast::ptr create (value_type v)
@@ -927,6 +962,17 @@ namespace json
     {
       // TODO: Add escaping
       o << '"' << value << '"';
+    }
+
+    bool is_equal_to (json_ast::ptr const & o) const override
+    {
+      auto other = std::dynamic_pointer_cast<json_string> (o);
+      if (!other)
+      {
+        return false;
+      }
+
+      return value == other->value;
     }
 
     static json_ast::ptr create (value_type v)
@@ -966,6 +1012,31 @@ namespace json
       }
 
       o << ']';
+    }
+
+    bool is_equal_to (json_ast::ptr const & o) const override
+    {
+      auto other = std::dynamic_pointer_cast<json_array> (o);
+      if (!other)
+      {
+        return false;
+      }
+
+      return
+        std::equal (
+            value.begin ()
+          , value.end ()
+          , other->value.begin ()
+          , other->value.end ()
+          , [] (auto && l, auto && r) -> bool
+          {
+            if (!l || !r)
+            {
+              return !l && !r;
+            }
+
+            return l->is_equal_to (r);
+          });
     }
 
     static json_ast::ptr create (value_type v)
@@ -1013,6 +1084,41 @@ namespace json
       }
 
       o << '}';
+    }
+
+    bool is_equal_to (json_ast::ptr const & o) const override
+    {
+      auto other = std::dynamic_pointer_cast<json_object> (o);
+      if (!other)
+      {
+        return false;
+      }
+
+      return
+        std::equal (
+            value.begin ()
+          , value.end ()
+          , other->value.begin ()
+          , other->value.end ()
+          , [] (auto && l, auto && r) -> bool
+          {
+            auto lk = std::get<0> (l);
+            auto rk = std::get<0> (r);
+            auto lv = std::get<1> (l);
+            auto rv = std::get<1> (r);
+
+            if (lk != rk)
+            {
+              return false;
+            }
+
+            if (!lv || !rv)
+            {
+              return !lv && !rv;
+            }
+
+            return lv->is_equal_to (rv);
+          });
     }
 
     static json_ast::ptr create (value_type v)
@@ -1134,7 +1240,7 @@ namespace json
 
   void parse_and_print (const std::string & input)
   {
-    auto r = parse (pjson > peos, input);
+    auto r = parse (pjson, input);
     if (r.value)
     {
 
@@ -1153,9 +1259,140 @@ namespace json
     }
   }
 
+  int next (std::mt19937 & random, int from, int to)
+  {
+    std::uniform_int_distribution<int> d (from, to);
+    return d (random);
+  }
+
+  auto string_size  = 10;
+  auto array_size   = 10;
+  auto object_size  = 10;
+  auto max_level    = 4;
+
+  std::string generate_string (std::mt19937 & random)
+  {
+    std::string result;
+
+    auto sz = next (random, 0, string_size);
+    result.reserve (sz);
+    for (auto iter = 0; iter < sz; ++iter)
+    {
+      result.push_back (static_cast<char> (next (random, 65, 90)));
+    }
+
+    return result;
+  };
+
+  json_ast::ptr generate_ast (std::mt19937 & random, int level)
+  {
+    auto min = 0;
+    auto max = 10;
+
+    if (level == 0)
+    {
+      // Only allows array/object
+      max = 1;
+    }
+    else if (level > max_level)
+    {
+      // Disallows array/object
+      min = 2;
+    }
+
+    switch (next (random, min, max))
+    {
+    case 0:
+      {
+        json_array::value_type result;
+
+        auto sz = next (random, 0, array_size);
+        result.reserve (sz);
+        for (auto iter = 0; iter < sz; ++iter)
+        {
+          result.push_back (generate_ast (random, level + 1));
+        }
+
+        return json_array::create (std::move (result));
+      }
+    case 1:
+      {
+        json_object::value_type result;
+
+        auto sz = next (random, 0, object_size);
+        result.reserve (sz);
+        for (auto iter = 0; iter < sz; ++iter)
+        {
+          result.push_back (std::make_tuple (generate_string (random), generate_ast (random, level + 1)));
+        }
+
+        return json_object::create (std::move (result));
+      }
+    case 2:
+      return json_null_value;
+    case 3:
+    case 4:
+      return
+        next (random, 0, 1) == 0
+          ? json_true_value
+          : json_false_value
+          ;
+    case 5:
+    case 6:
+    case 7:
+      return json_number::create (next (random, -1000, 1000) / 4.0);
+    case 8:
+    case 9:
+    case 10:
+      return json_string::create (generate_string (random));
+    default:
+      return json_null_value;
+    }
+  }
 
   void test_json ()
   {
+    std::mt19937 random (19740531);
+
+    auto random_testcases = 100;
+
+    std::cout << "Running " << random_testcases << " JSON testcases..." << std::endl;
+
+    for (auto iter = 0; iter < random_testcases; ++iter)
+    {
+      auto gen    = generate_ast (random, 0);
+      auto sgen   = to_string (gen);
+
+//      std::cout << "-- " << std::endl << sgen << std::endl;
+
+      auto r = parse (pjson, sgen);
+      if (r.value)
+      {
+        auto parsed   = r.value.get ();
+        auto sparsed  = to_string (parsed);
+
+        if (!gen->is_equal_to (parsed))
+        {
+          std::cout
+
+            << "ERROR: Parsed JSON not parsed correctly" << std::endl
+            << "Original: " << sgen << std::endl
+            << "Parsed  : " << sparsed << std::endl
+            ;
+        }
+      }
+      else
+      {
+        std::cout
+          << "ERROR: Failed to parse '" << sgen  << "' with message: " << std::endl
+          << r.message << std::endl
+          ;
+      }
+    }
+
+    std::cout << "Done!" << std::endl;
+
+    /*
     parse_and_print ("[1.0g32]");
     parse_and_print ("[2,1.0g32]");
     parse_and_print ("2");
@@ -1165,6 +1402,7 @@ namespace json
     parse_and_print ("{}");
     parse_and_print ("{,}");
     parse_and_print (R"({"x":3, "y":null})");
+    */
   };
 }
 // ----------------------------------------------------------------------------
